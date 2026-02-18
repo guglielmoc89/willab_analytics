@@ -1,6 +1,6 @@
 import React from "react";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Clock, DollarSign, Home, TrendingUp, FolderOpen, Tag, PieChart, UserCircle, Users, Settings, FileText, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Info as InfoIcon, Plus, X, Copy, Upload, Calendar, Search, LayoutDashboard, Download, AlertTriangle, Check, Cloud, Loader } from "lucide-react";
+import { Clock, DollarSign, Home, TrendingUp, FolderOpen, Tag, PieChart, UserCircle, Users, Settings, FileText, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Info as InfoIcon, Plus, X, Copy, Upload, Calendar, Search, LayoutDashboard, Download, AlertTriangle, Check, Cloud, Loader, Briefcase } from "lucide-react";
 
 function canStore(){try{localStorage.setItem("_t","1");localStorage.removeItem("_t");return true;}catch(e){return false;}}
 function loadCfgLocal(){try{if(!canStore())return {};var d=localStorage.getItem("wl-cfg");return d?JSON.parse(d):{};}catch(e){return {};}}
@@ -161,13 +161,15 @@ export default function App(){
   var _cm=useState(""),cfgM=_cm[0],setCfgM=_cm[1];
   var _po=useState({clients:true,areas:false,people:false,trend:false}),profOpen=_po[0],setProfOpen=_po[1];
   var toggleProf=function(k){setProfOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
-  var _co=useState({internal:false,costs:true,fees:true,extras:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
+  var _co=useState({internal:false,costs:true,fees:true,extras:false,budgets:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
   var toggleCfg=function(k){setCfgOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
   var _sync=useState("idle"),syncSt=_sync[0],setSyncSt=_sync[1];
   var _search=useState(""),search=_search[0],setSearch=_search[1];
   var _undo=useState(null),undoData=_undo[0],setUndoData=_undo[1];
   var _sortAZ=useState(false),sortAZ=_sortAZ[0],setSortAZ=_sortAZ[1];
   var _chartG=useState("month"),chartG=_chartG[0],setChartG=_chartG[1];
+  var _clOpen=useState({}),clOpen=_clOpen[0],setClOpen=_clOpen[1];
+  var toggleCl=function(name){setClOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -272,6 +274,35 @@ export default function App(){
   };
   var doUndo=function(){if(undoData&&undoData.restore){setCfg(undoData.restore);setUndoData(null);clearTimeout(undoTimer.current);}};
   var copyNext=function(m){var nm=nextMK(m);setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));var src=n[m]||{costs:{},fees:{},extras:[]};n[nm]={costs:Object.assign({},src.costs),fees:Object.assign({},src.fees),extras:JSON.parse(JSON.stringify(src.extras||[]))};return n;});};
+  // Budget management
+  var addBudget=function(client,name,amount){
+    setCfg(function(prev){
+      var n=JSON.parse(JSON.stringify(prev));
+      if(!n._budgets)n._budgets={};
+      var id="b_"+Date.now();
+      n._budgets[id]={client:client,name:name,amount:amount,spent:0};
+      return n;
+    });
+  };
+  var updateBudget=function(id,field,val){
+    setCfg(function(prev){
+      var n=JSON.parse(JSON.stringify(prev));
+      if(n._budgets&&n._budgets[id])n._budgets[id][field]=val;
+      return n;
+    });
+  };
+  var removeBudget=function(id){
+    if(!window.confirm("Eliminare questo budget?"))return;
+    var backup=JSON.parse(JSON.stringify(cfg));
+    setCfg(function(prev){
+      var n=JSON.parse(JSON.stringify(prev));
+      if(n._budgets)delete n._budgets[id];
+      return n;
+    });
+    clearTimeout(undoTimer.current);
+    setUndoData({label:"Budget eliminato",restore:backup});
+    undoTimer.current=setTimeout(function(){setUndoData(null);},5000);
+  };
 
   useEffect(function(){if(Object.keys(cfg).length>0){saveCfgLocal(cfg);setSyncSt("saving");sbSave({cfg:cfg},null,function(s){setSyncSt(s);setTimeout(function(){setSyncSt("idle");},2000);});}},[cfg]);
 
@@ -1006,30 +1037,78 @@ export default function App(){
             var margin=fee>0?fee-c.totalCost:0;
             var mp=fee>0?((fee-c.totalCost)/fee)*100:0;
             var pos=margin>=0;
-            return (<div key={c.name} style={{...bx,marginBottom:12,opacity:c.isI?0.7:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+            var isOpen=clOpen[c.name];
+            return (<div key={c.name} style={{...bx,marginBottom:10,opacity:c.isI?0.7:1,overflow:"hidden"}}>
+              {/* Accordion header */}
+              <div onClick={function(){toggleCl(c.name);}} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"2px 0"}}>
                 <span style={{width:10,height:10,borderRadius:3,background:clr,flexShrink:0}}/>
                 <span style={{fontSize:15,fontWeight:700,textTransform:"capitalize",flex:1}}>{c.name}</span>
-                {c.isI&&<span style={{fontSize:10,color:C.sl,background:"rgba(142,142,147,0.1)",padding:"2px 8px",borderRadius:8}}>Interno</span>}
-                <span style={{fontSize:12,color:C.tm}}>{fmtH(c.hours)} · {c.people.length} pers.</span>
+                {c.isI&&<span style={{fontSize:9,color:C.sl,background:"rgba(142,142,147,0.1)",padding:"2px 7px",borderRadius:6}}>Interno</span>}
+                {!c.isI&&fee>0&&<span style={{fontSize:12,fontWeight:700,color:pos?C.gn:C.rd}}>{(pos?"+":"")+pct(mp)}</span>}
+                <span style={{fontSize:12,color:C.tm,fontWeight:600}}>{fmtH(c.hours)}</span>
+                <ChevronDown size={14} color={C.tm} style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}/>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:c.isI?"1fr 1fr":"1fr 1fr 1fr",gap:10}}>
-                <div style={{background:C.amBg,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:C.am,marginBottom:4,letterSpacing:".04em"}}>COSTO</div>
-                  <div style={{fontSize:16,fontWeight:800,color:C.tx}}>{fmt(c.totalCost)}</div>
-                  {c.hours>0&&<div style={{fontSize:10,color:C.tm,marginTop:2}}>{fmt(c.totalCost/c.hours)}/h</div>}
+              {/* Accordion body */}
+              {isOpen&&(<div style={{marginTop:14}}>
+                <div style={{display:"grid",gridTemplateColumns:c.isI?"1fr 1fr":"1fr 1fr 1fr",gap:10}}>
+                  <div style={{background:C.amBg,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:C.am,marginBottom:4,letterSpacing:".04em"}}>COSTO</div>
+                    <div style={{fontSize:16,fontWeight:800,color:C.tx}}>{fmt(c.totalCost)}</div>
+                    {c.hours>0&&<div style={{fontSize:10,color:C.tm,marginTop:2}}>{fmt(c.totalCost/c.hours)}/h</div>}
+                  </div>
+                  {!c.isI&&<div style={{background:fee>0?C.blBg:"rgba(142,142,147,0.06)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:fee>0?C.bl:C.td,marginBottom:4,letterSpacing:".04em"}}>FEE</div>
+                    <div style={{fontSize:16,fontWeight:800,color:fee>0?C.tx:C.td}}>{fee>0?fmt(fee):"—"}</div>
+                    {fee>0&&c.hours>0&&<div style={{fontSize:10,color:C.tm,marginTop:2}}>{fmt(fee/c.hours)}/h</div>}
+                  </div>}
+                  <div style={{background:fee>0?(pos?C.gnBg:C.rdBg):"rgba(142,142,147,0.06)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:fee>0?(pos?C.gn:C.rd):C.td,marginBottom:4,letterSpacing:".04em"}}>{c.isI?"ORE":"MARGINE"}</div>
+                    {c.isI?(<div style={{fontSize:16,fontWeight:800,color:C.tx}}>{fmtH(c.hours)}</div>):(<div style={{fontSize:16,fontWeight:800,color:fee>0?(pos?C.gn:C.rd):C.td}}>{fee>0?fmt(margin):"—"}</div>)}
+                    {!c.isI&&fee>0&&<div style={{fontSize:10,color:pos?C.gn:C.rd,marginTop:2}}>{(pos?"+":"")+pct(mp)}</div>}
+                  </div>
                 </div>
-                {!c.isI&&<div style={{background:fee>0?C.blBg:"rgba(142,142,147,0.06)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:fee>0?C.bl:C.td,marginBottom:4,letterSpacing:".04em"}}>FEE</div>
-                  <div style={{fontSize:16,fontWeight:800,color:fee>0?C.tx:C.td}}>{fee>0?fmt(fee):"—"}</div>
-                  {fee>0&&c.hours>0&&<div style={{fontSize:10,color:C.tm,marginTop:2}}>{fmt(fee/c.hours)}/h</div>}
-                </div>}
-                <div style={{background:fee>0?(pos?C.gnBg:C.rdBg):"rgba(142,142,147,0.06)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:fee>0?(pos?C.gn:C.rd):C.td,marginBottom:4,letterSpacing:".04em"}}>{c.isI?"ORE":"MARGINE"}</div>
-                  {c.isI?(<div style={{fontSize:16,fontWeight:800,color:C.tx}}>{fmtH(c.hours)}</div>):(<div style={{fontSize:16,fontWeight:800,color:fee>0?(pos?C.gn:C.rd):C.td}}>{fee>0?fmt(margin):"—"}</div>)}
-                  {!c.isI&&fee>0&&<div style={{fontSize:10,color:pos?C.gn:C.rd,marginTop:2}}>{(pos?"+":"")+pct(mp)}</div>}
-                </div>
-              </div>
+                {/* Break-even */}
+                {!c.isI&&fee>0&&c.hours>0&&c.totalCost>0&&(function(){
+                  var costPerH=c.totalCost/c.hours;
+                  var beHours=costPerH>0?fee/costPerH:0;
+                  var usedPct=beHours>0?(c.hours/beHours)*100:0;
+                  var over=c.hours>beHours;
+                  return (<div style={{marginTop:10,padding:"8px 12px",background:over?C.rdBg:C.gnBg,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:11,color:over?C.rd:C.gn,fontWeight:600}}>Break-even: {Math.round(beHours)}h</div>
+                    <div style={{fontSize:11,fontWeight:700,color:over?C.rd:C.gn}}>{fmtH(c.hours)} / {Math.round(beHours)}h ({pct(usedPct)})</div>
+                  </div>);
+                })()}
+                {/* People on this client */}
+                {c.people.length>0&&(<div style={{marginTop:10,fontSize:12,color:C.tm}}>
+                  <span style={{fontWeight:600}}>Team:</span> {c.people.join(", ")}
+                </div>)}
+                {/* Budget projects */}
+                {cfg._budgets&&(function(){
+                  var budgets=Object.keys(cfg._budgets).filter(function(k){return cfg._budgets[k]&&cfg._budgets[k].client===c.name;});
+                  if(budgets.length===0)return null;
+                  return (<div style={{marginTop:10}}>
+                    {budgets.map(function(bk){
+                      var b=cfg._budgets[bk];
+                      var spent=b.spent||0;
+                      if(b.trackHours){var costPerH2=c.hours>0?c.totalCost/c.hours:0;spent=costPerH2*(b.trackedHours||0);}
+                      var remain=b.amount-spent;
+                      var usedP=b.amount>0?(spent/b.amount)*100:0;
+                      var over2=usedP>100;
+                      return (<div key={bk} style={{padding:"8px 12px",background:over2?C.rdBg+"88":"rgba(0,0,0,0.02)",borderRadius:8,marginBottom:6,border:"1px solid "+(over2?C.rd+"22":C.bdL)}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                          <span style={{fontSize:12,fontWeight:700}}>{b.name}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:over2?C.rd:C.gn}}>{fmt(remain)} rimanenti</span>
+                        </div>
+                        <div style={{height:5,background:C.bdL,borderRadius:3}}><div style={{height:"100%",borderRadius:3,background:over2?C.rd:usedP>80?C.am:C.gn,width:pct(Math.min(usedP,100))}}/></div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:10,color:C.tm}}>
+                          <span>{fmt(spent)} speso</span>
+                          <span>Budget: {fmt(b.amount)}</span>
+                        </div>
+                      </div>);
+                    })}
+                  </div>);
+                })()}
+              </div>)}
             </div>);
           })}</div>
         )}
@@ -1633,6 +1712,52 @@ export default function App(){
                   <span style={{color:C.or}}>{fmt(tot)}</span>
                 </div>);
               })()}
+            </Accordion>
+
+            {/* 5. BUDGET PROGETTI */}
+            <Accordion icon={Briefcase} title="Budget progetti" badge={(cfg._budgets?Object.keys(cfg._budgets).length:0)+" budget"} open={cfgOpen.budgets} onToggle={function(){toggleCfg("budgets");}}>
+              <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Imposta budget per progetto. Aggiorna lo "speso" manualmente.</p>
+              {cfg._budgets&&Object.keys(cfg._budgets).map(function(bk){
+                var b=cfg._budgets[bk];
+                var usedP=b.amount>0?((b.spent||0)/b.amount)*100:0;
+                var over=usedP>100;
+                return (<div key={bk} style={{background:C.sf,border:"1px solid "+C.bdL,borderRadius:12,padding:16,marginBottom:10}}>
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+                    <select value={b.client||""} onChange={function(e){updateBudget(bk,"client",e.target.value);}} style={{...ix,flex:1,fontSize:12,textTransform:"capitalize"}}>
+                      <option value="">Cliente...</option>
+                      {allClients.map(function(c){return (<option key={c} value={c}>{c}</option>);})}
+                    </select>
+                    <button onClick={function(){removeBudget(bk);}} style={{background:"transparent",border:"1px solid "+C.rd+"44",borderRadius:7,padding:"6px 8px",color:C.rd,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+                  </div>
+                  <div style={{display:"flex",gap:8,marginBottom:10}}>
+                    <input type="text" value={b.name||""} onChange={function(e){updateBudget(bk,"name",e.target.value);}} placeholder="Nome progetto..." style={{...ix,flex:1,fontSize:13,fontWeight:600}}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.ac,marginBottom:4,letterSpacing:".04em"}}>BUDGET</div>
+                      <div style={{position:"relative"}}>
+                        <input type="number" min="0" step="100" value={b.amount||""} onChange={function(e){updateBudget(bk,"amount",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:20,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder="0"/>
+                        <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11}}>€</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.am,marginBottom:4,letterSpacing:".04em"}}>SPESO</div>
+                      <div style={{position:"relative"}}>
+                        <input type="number" min="0" step="50" value={b.spent||""} onChange={function(e){updateBudget(bk,"spent",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:20,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder="0"/>
+                        <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11}}>€</span>
+                      </div>
+                    </div>
+                  </div>
+                  {b.amount>0&&(<div>
+                    <div style={{height:6,background:C.bdL,borderRadius:3,marginBottom:4}}><div style={{height:"100%",borderRadius:3,background:over?C.rd:usedP>80?C.am:C.gn,width:pct(Math.min(usedP,100))}}/></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.tm}}>
+                      <span>{pct(usedP)} utilizzato</span>
+                      <span style={{fontWeight:700,color:over?C.rd:C.gn}}>{fmt(b.amount-(b.spent||0))} rimanenti</span>
+                    </div>
+                  </div>)}
+                </div>);
+              })}
+              <button onClick={function(){addBudget("","Nuovo progetto",0);}} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px dashed "+C.ac+"44",background:"transparent",color:C.ac,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={14}/> Aggiungi budget</button>
             </Accordion>
 
             <div style={{...bx,padding:12,background:C.gn+"08",borderColor:C.gn+"22"}}><span style={{fontSize:12,color:C.gn}}>✓ Salvato automaticamente nel cloud</span></div>
