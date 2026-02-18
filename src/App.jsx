@@ -168,66 +168,99 @@ export default function App(){
 
     var startMs=new Date(ckFrom).getTime();
     var endMs=new Date(ckTo+"T23:59:59").getTime();
+    var hdrs={"Authorization":ckToken,"Content-Type":"application/json"};
 
-    // ClickUp API: paginate time entries (max 100 per page)
-    var allEntries=[];
-    var fetchPage=function(page){
-      fetch("https://api.clickup.com/api/v2/team/"+ckTeam+"/time_entries?start_date="+startMs+"&end_date="+endMs+"&page="+page,{
-        headers:{"Authorization":ckToken,"Content-Type":"application/json"}
-      }).then(function(res){
-        if(!res.ok)throw new Error("API error: "+res.status);
-        return res.json();
-      }).then(function(json){
-        var entries=json.data||[];
-        allEntries=allEntries.concat(entries);
-        if(entries.length>=100){
-          fetchPage(page+1);
-        } else {
-          // Map ClickUp entries to our record format
-          var mapped=allEntries.map(function(e){
-            var user=e.user?e.user.username||"":"";
-            var taskName=e.task?e.task.name||"":"";
-            var taskTags=(e.task&&e.task.tags)||[];
-            var tags=e.tags||taskTags||[];
-            var tagNames=tags.map(function(t){return (t.name||"").toLowerCase().trim();}).filter(Boolean);
-            var ext=tagNames.filter(function(t){return t!=="willab";});
-            var client=ext.length>0?ext[0]:(tagNames.indexOf("willab")>=0?"willab":"");
-            var space=e.task&&e.task.space?e.task.space.name||"":"";
-            var list=e.task&&e.task.list?e.task.list.name||"":"";
-            var dur=parseInt(e.duration||"0");
-            var hours=dur/3600000;
-            var startT=parseInt(e.start||"0");
-            var d=startT>0?new Date(startT):null;
-            var startHour=d?d.getHours():-1;
-            var weekday=d?d.getDay():-1;
-            var hasDesc=(e.description||"").trim().length>0;
-            return {user:user,space:space,area:list,client:client,hours:hours,date:d,startHour:startHour,weekday:weekday,task:taskName,hasDesc:hasDesc};
-          }).filter(function(r){return r.hours>0&&r.user&&r.date;});
+    // Step 1: Get all team members
+    fetch("https://api.clickup.com/api/v2/team/"+ckTeam,{headers:hdrs})
+    .then(function(res){
+      if(!res.ok)throw new Error("Errore team API: "+res.status);
+      return res.json();
+    })
+    .then(function(teamData){
+      var members=[];
+      if(teamData.team&&teamData.team.members){
+        members=teamData.team.members.map(function(m){return {id:m.user.id,name:m.user.username||m.user.email||""};});
+      }
+      if(members.length===0)throw new Error("Nessun membro trovato nel team");
 
-          if(mapped.length===0){
-            setCkError("Nessuna entry trovata nel periodo selezionato");
-            setCkLoading(false);
-            return;
+      setCkError("Trovati "+members.length+" membri. Scaricando entries...");
+
+      // Step 2: Fetch time entries for each member
+      var allEntries=[];
+      var membersDone=0;
+
+      var fetchMemberEntries=function(userId,userName,page){
+        fetch("https://api.clickup.com/api/v2/team/"+ckTeam+"/time_entries?start_date="+startMs+"&end_date="+endMs+"&assignee="+userId+"&page="+page,{headers:hdrs})
+        .then(function(res){
+          if(!res.ok)throw new Error("API error per "+userName+": "+res.status);
+          return res.json();
+        })
+        .then(function(json){
+          var entries=json.data||[];
+          entries.forEach(function(e){e._userName=userName;});
+          allEntries=allEntries.concat(entries);
+          if(entries.length>=100){
+            fetchMemberEntries(userId,userName,page+1);
+          } else {
+            membersDone++;
+            setCkError("Scaricati "+membersDone+"/"+members.length+" membri ("+allEntries.length+" entries)...");
+            if(membersDone>=members.length){
+              finishImport(allEntries);
+            }
           }
+        })
+        .catch(function(err){
+          membersDone++;
+          if(membersDone>=members.length)finishImport(allEntries);
+        });
+      };
 
-          // Save as CSV-like format in localStorage/Supabase
-          setAllRec(mapped);
-          setFn("ClickUp Import "+ckFrom+" → "+ckTo);
-          setView("dashboard");setTab("overview");
-          setCkLoading(false);
-          // Save to local
-          try{
-            localStorage.setItem("wl_ck_source","clickup");
-            localStorage.setItem("wl_ck_from",ckFrom);
-            localStorage.setItem("wl_ck_to",ckTo);
-          }catch(e){}
-        }
-      }).catch(function(err){
-        setCkError("Errore: "+err.message);
-        setCkLoading(false);
+      members.forEach(function(m){
+        fetchMemberEntries(m.id,m.name,0);
       });
+    })
+    .catch(function(err){
+      setCkError("Errore: "+err.message);
+      setCkLoading(false);
+    });
+
+    var finishImport=function(allEntries){
+      var mapped=allEntries.map(function(e){
+        var user=e._userName||e.user&&e.user.username||"";
+        var taskName=e.task?e.task.name||"":"";
+        var taskTags=(e.task&&e.task.tags)||[];
+        var tags=e.tags||taskTags||[];
+        var tagNames=tags.map(function(t){return (t.name||"").toLowerCase().trim();}).filter(Boolean);
+        var ext=tagNames.filter(function(t){return t!=="willab";});
+        var client=ext.length>0?ext[0]:(tagNames.indexOf("willab")>=0?"willab":"");
+        var space=e.task&&e.task.space?e.task.space.name||"":"";
+        var list=e.task&&e.task.list?e.task.list.name||"":"";
+        var dur=parseInt(e.duration||"0");
+        var hours=dur/3600000;
+        var startT=parseInt(e.start||"0");
+        var d=startT>0?new Date(startT):null;
+        var startHour=d?d.getHours():-1;
+        var weekday=d?d.getDay():-1;
+        var hasDesc=(e.description||"").trim().length>0;
+        return {user:user,space:space,area:list,client:client,hours:hours,date:d,startHour:startHour,weekday:weekday,task:taskName,hasDesc:hasDesc};
+      }).filter(function(r){return r.hours>0&&r.user&&r.date;});
+
+      if(mapped.length===0){
+        setCkError("Nessuna entry trovata nel periodo selezionato");
+        setCkLoading(false);
+        return;
+      }
+
+      setAllRec(mapped);
+      setFn("ClickUp Import "+ckFrom+" → "+ckTo+" ("+mapped.length+" entries)");
+      setView("dashboard");setTab("overview");
+      setCkLoading(false);setCkError("");
+      try{
+        localStorage.setItem("wl_ck_source","clickup");
+        localStorage.setItem("wl_ck_from",ckFrom);
+        localStorage.setItem("wl_ck_to",ckTo);
+      }catch(e){}
     };
-    fetchPage(0);
   };
   var _a=useState([]),allRec=_a[0],setAllRec=_a[1];
   var _c=useState({}),cfg=_c[0],setCfg=_c[1];
