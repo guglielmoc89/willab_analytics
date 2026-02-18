@@ -152,6 +152,83 @@ function Accordion(props){
 
 export default function App(){
   var _s=useState("upload"),view=_s[0],setView=_s[1];
+  var _ckMode=useState(false),ckMode=_ckMode[0],setCkMode=_ckMode[1];
+  var _ckToken=useState(function(){try{return localStorage.getItem("wl_ck_token")||"";}catch(e){return "";}}),ckToken=_ckToken[0],setCkToken=_ckToken[1];
+  var _ckTeam=useState(function(){try{return localStorage.getItem("wl_ck_team")||"";}catch(e){return "";}}),ckTeam=_ckTeam[0],setCkTeam=_ckTeam[1];
+  var _ckFrom=useState(""),ckFrom=_ckFrom[0],setCkFrom=_ckFrom[1];
+  var _ckTo=useState(""),ckTo=_ckTo[0],setCkTo=_ckTo[1];
+  var _ckLoading=useState(false),ckLoading=_ckLoading[0],setCkLoading=_ckLoading[1];
+  var _ckError=useState(""),ckError=_ckError[0],setCkError=_ckError[1];
+
+  var importClickUp=function(){
+    if(!ckToken||!ckTeam){setCkError("Inserisci token e Team ID");return;}
+    if(!ckFrom||!ckTo){setCkError("Seleziona date di inizio e fine");return;}
+    setCkLoading(true);setCkError("");
+    try{localStorage.setItem("wl_ck_token",ckToken);localStorage.setItem("wl_ck_team",ckTeam);}catch(e){}
+
+    var startMs=new Date(ckFrom).getTime();
+    var endMs=new Date(ckTo+"T23:59:59").getTime();
+
+    // ClickUp API: paginate time entries (max 100 per page)
+    var allEntries=[];
+    var fetchPage=function(page){
+      fetch("https://api.clickup.com/api/v2/team/"+ckTeam+"/time_entries?start_date="+startMs+"&end_date="+endMs+"&page="+page,{
+        headers:{"Authorization":ckToken,"Content-Type":"application/json"}
+      }).then(function(res){
+        if(!res.ok)throw new Error("API error: "+res.status);
+        return res.json();
+      }).then(function(json){
+        var entries=json.data||[];
+        allEntries=allEntries.concat(entries);
+        if(entries.length>=100){
+          fetchPage(page+1);
+        } else {
+          // Map ClickUp entries to our record format
+          var mapped=allEntries.map(function(e){
+            var user=e.user?e.user.username||"":"";
+            var taskName=e.task?e.task.name||"":"";
+            var taskTags=(e.task&&e.task.tags)||[];
+            var tags=e.tags||taskTags||[];
+            var tagNames=tags.map(function(t){return (t.name||"").toLowerCase().trim();}).filter(Boolean);
+            var ext=tagNames.filter(function(t){return t!=="willab";});
+            var client=ext.length>0?ext[0]:(tagNames.indexOf("willab")>=0?"willab":"");
+            var space=e.task&&e.task.space?e.task.space.name||"":"";
+            var list=e.task&&e.task.list?e.task.list.name||"":"";
+            var dur=parseInt(e.duration||"0");
+            var hours=dur/3600000;
+            var startT=parseInt(e.start||"0");
+            var d=startT>0?new Date(startT):null;
+            var startHour=d?d.getHours():-1;
+            var weekday=d?d.getDay():-1;
+            var hasDesc=(e.description||"").trim().length>0;
+            return {user:user,space:space,area:list,client:client,hours:hours,date:d,startHour:startHour,weekday:weekday,task:taskName,hasDesc:hasDesc};
+          }).filter(function(r){return r.hours>0&&r.user&&r.date;});
+
+          if(mapped.length===0){
+            setCkError("Nessuna entry trovata nel periodo selezionato");
+            setCkLoading(false);
+            return;
+          }
+
+          // Save as CSV-like format in localStorage/Supabase
+          setAllRec(mapped);
+          setFn("ClickUp Import "+ckFrom+" → "+ckTo);
+          setView("dashboard");setTab("overview");
+          setCkLoading(false);
+          // Save to local
+          try{
+            localStorage.setItem("wl_ck_source","clickup");
+            localStorage.setItem("wl_ck_from",ckFrom);
+            localStorage.setItem("wl_ck_to",ckTo);
+          }catch(e){}
+        }
+      }).catch(function(err){
+        setCkError("Errore: "+err.message);
+        setCkLoading(false);
+      });
+    };
+    fetchPage(0);
+  };
   var _a=useState([]),allRec=_a[0],setAllRec=_a[1];
   var _c=useState({}),cfg=_c[0],setCfg=_c[1];
   var _t=useState("overview"),tab=_t[0],setTab=_t[1];
@@ -989,12 +1066,52 @@ export default function App(){
           </div>
           <h1 style={{fontSize:28,fontWeight:800,margin:"0 0 6px",letterSpacing:"-.03em",color:C.tx}}>Willab Analytics</h1>
           <p style={{color:C.tm,fontSize:14,lineHeight:1.6,marginBottom:32}}>Carica l'export Time Tracking di ClickUp</p>
+
+          {/* Toggle CSV / ClickUp */}
+          <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:10,overflow:"hidden",border:"1px solid "+C.bd}}>
+            <button onClick={function(){setCkMode(false);}} style={{flex:1,padding:"10px",fontSize:13,fontWeight:700,border:"none",background:!ckMode?C.ac:"transparent",color:!ckMode?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit"}}>📄 CSV</button>
+            <button onClick={function(){setCkMode(true);}} style={{flex:1,padding:"10px",fontSize:13,fontWeight:700,border:"none",background:ckMode?C.ac:"transparent",color:ckMode?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit"}}>⚡ ClickUp API</button>
+          </div>
+
+          {!ckMode&&(<div>
           <div onClick={function(){fr.current&&fr.current.click();}} style={{...bx,padding:"48px 24px",cursor:"pointer",border:"2px dashed "+C.bd,background:C.sf}}>
             <div style={{width:44,height:44,borderRadius:12,background:C.acL,margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center"}}><Upload size={20} color={C.ac} strokeWidth={2}/></div>
             <div style={{fontWeight:700,fontSize:15,marginBottom:4,color:C.tx}}>Carica CSV ClickUp</div>
             <div style={{color:C.tm,fontSize:13}}>Time Tracking Export (.csv)</div>
             <input ref={fr} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={handleFile}/>
           </div>
+          </div>)}
+
+          {ckMode&&(<div>
+            <div style={{...bx,padding:20,textAlign:"left"}}>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:11,fontWeight:700,color:C.tm,display:"block",marginBottom:4,letterSpacing:".04em"}}>API TOKEN</label>
+                <input type="password" value={ckToken} onChange={function(e){setCkToken(e.target.value);}} placeholder="pk_..." style={{...ix,width:"100%",fontSize:13}}/>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:11,fontWeight:700,color:C.tm,display:"block",marginBottom:4,letterSpacing:".04em"}}>TEAM ID</label>
+                <input type="text" value={ckTeam} onChange={function(e){setCkTeam(e.target.value);}} placeholder="9010073546" style={{...ix,width:"100%",fontSize:13}}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                <div>
+                  <label style={{fontSize:11,fontWeight:700,color:C.tm,display:"block",marginBottom:4,letterSpacing:".04em"}}>DA</label>
+                  <input type="date" value={ckFrom} onChange={function(e){setCkFrom(e.target.value);}} style={{...ix,width:"100%",fontSize:13}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:11,fontWeight:700,color:C.tm,display:"block",marginBottom:4,letterSpacing:".04em"}}>A</label>
+                  <input type="date" value={ckTo} onChange={function(e){setCkTo(e.target.value);}} style={{...ix,width:"100%",fontSize:13}}/>
+                </div>
+              </div>
+              {ckError&&<div style={{padding:"8px 12px",background:C.rdBg,borderRadius:8,marginBottom:12,fontSize:12,color:C.rd,fontWeight:600}}>{ckError}</div>}
+              <button onClick={importClickUp} disabled={ckLoading} style={{width:"100%",padding:"14px",borderRadius:10,border:"none",background:ckLoading?"#ccc":"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:15,fontWeight:800,cursor:ckLoading?"wait":"pointer",fontFamily:"inherit"}}>
+                {ckLoading?"Importando...":"Importa da ClickUp"}
+              </button>
+              <div style={{fontSize:11,color:C.td,marginTop:10,lineHeight:1.5}}>
+                Token: ClickUp → Avatar → Settings → Apps → API Token<br/>
+                Team ID: numero nell'URL di ClickUp (app.clickup.com/<b>XXXXXXX</b>/home)
+              </div>
+            </div>
+          </div>)}
           <p style={{color:C.td,fontSize:12,marginTop:20}}>I dati restano nel browser e nel cloud.</p>
         </div>
       </div>
