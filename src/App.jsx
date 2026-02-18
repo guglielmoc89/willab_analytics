@@ -913,15 +913,15 @@ export default function App(){
 
         {/* Tabs */}
         <div style={{display:"flex",gap:2,marginBottom:18,background:C.sf,borderRadius:13,padding:3,border:"1px solid "+C.bdL,width:"fit-content"}}>
-          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[UserCircle,"people","Persone"],[Users,"team","Team"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
+          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
         </div>
 
         {/* SEARCH BAR + SORT - shown on clients, people, areas, team */}
-        {(tab==="clients"||tab==="people"||tab==="areas"||tab==="team")&&(
+        {(tab==="clients"||tab==="areas"||tab==="team")&&(
           <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
             <div style={{position:"relative",flex:1}}>
               <Search size={15} color={C.td} strokeWidth={2} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
-              <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={"Cerca "+(tab==="clients"?"cliente":tab==="people"||tab==="team"?"persona":"area")+"..."} style={{...ix,width:"100%",paddingLeft:36,fontSize:13}}/>
+              <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={"Cerca "+(tab==="clients"?"cliente":tab==="team"?"persona":"area")+"..."} style={{...ix,width:"100%",paddingLeft:36,fontSize:13}}/>
             </div>
             <button onClick={function(){setSortAZ(!sortAZ);}} style={{...ix,padding:"9px 12px",fontSize:12,fontWeight:700,color:sortAZ?C.ac:C.tm,border:"1px solid "+(sortAZ?C.ac:C.bd),background:sortAZ?C.acL:C.sf,cursor:"pointer",whiteSpace:"nowrap",borderRadius:9}}>{sortAZ?"A→Z":"Ore ↓"}</button>
           </div>
@@ -1346,92 +1346,14 @@ export default function App(){
         )}
 
         {/* PEOPLE */}
-        {tab==="people"&&(
-          <div>{PL.filter(function(p){return !search||p.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(p){
-            var isOpen=plOpen[p.name];
-            var hasMargin=p.revenue>0;
-            var mPos=p.margin>=0;
-            // Breakdown: clients this person worked on
-            var pClients={};records.filter(function(r){return r.user===p.name;}).forEach(function(r){if(r.client)pClients[r.client]=(pClients[r.client]||0)+r.hours;});
-            var clientList=Object.keys(pClients).map(function(c){return {name:c,h:pClients[c]};}).sort(function(a,b){return b.h-a.h;});
-            // Breakdown: areas
-            var pAreas={};records.filter(function(r){return r.user===p.name;}).forEach(function(r){if(r.area)pAreas[r.area]=(pAreas[r.area]||0)+r.hours;});
-            var areaList=Object.keys(pAreas).map(function(a){return {name:a,h:pAreas[a]};}).sort(function(a,b){return b.h-a.h;});
-
-            return (<div key={p.name} style={{...bx,marginBottom:10,overflow:"hidden"}}>
-              {/* Header */}
-              <div onClick={function(){togglePl(p.name);}} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"2px 0"}}>
-                <span style={{width:32,height:32,borderRadius:9,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>{p.name.charAt(0)}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14,fontWeight:700}}>{p.name}</div>
-                  <div style={{fontSize:11,color:C.tm}}>{fmt(p.rate)+"/h · "+p.areas.length+" aree"}{p.isOverhead&&" · Fisso"}</div>
-                </div>
-                <div style={{textAlign:"right",marginRight:6}}>
-                  <div style={{fontSize:16,fontWeight:800}}>{fmtH(p.hours)}</div>
-                  {hasMargin&&<div style={{fontSize:11,fontWeight:700,color:mPos?C.gn:C.rd}}>{(mPos?"+":"")+fmt(p.margin)}</div>}
-                  {!hasMargin&&<div style={{fontSize:11,color:C.tm}}>{fmt(p.totalCost)}</div>}
-                </div>
-                <ChevronDown size={14} color={C.tm} style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}/>
-              </div>
-
-              {/* Body */}
-              {isOpen&&(<div style={{marginTop:14}}>
-                {/* KPI grid */}
-                <div style={{display:"grid",gridTemplateColumns:hasMargin?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginBottom:12}}>
-                  <div style={{background:C.amBg,borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:9,fontWeight:700,color:C.am,letterSpacing:".04em",marginBottom:3}}>COSTO</div>
-                    <div style={{fontSize:15,fontWeight:800}}>{fmt(p.totalCost)}</div>
-                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{fmt(p.rate)}/h</div>
-                  </div>
-                  {hasMargin&&<div style={{background:C.blBg,borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:9,fontWeight:700,color:C.bl,letterSpacing:".04em",marginBottom:3}}>RICAVO ATTR.</div>
-                    <div style={{fontSize:15,fontWeight:800}}>{fmt(p.revenue)}</div>
-                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{p.hours>0?fmt(p.revenue/p.hours):0}/h</div>
-                  </div>}
-                  <div style={{background:hasMargin?(mPos?C.gnBg:C.rdBg):"rgba(142,142,147,0.06)",borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:9,fontWeight:700,color:hasMargin?(mPos?C.gn:C.rd):C.td,letterSpacing:".04em",marginBottom:3}}>{hasMargin?"MARGINE":"ORE"}</div>
-                    {hasMargin?(<div style={{fontSize:15,fontWeight:800,color:mPos?C.gn:C.rd}}>{fmt(p.margin)}</div>):(<div style={{fontSize:15,fontWeight:800}}>{fmtH(p.hours)}</div>)}
-                    {hasMargin&&<div style={{fontSize:10,color:mPos?C.gn:C.rd,marginTop:1}}>{(mPos?"+":"")+pct(p.mp)}</div>}
-                  </div>
-                </div>
-
-                {/* Clienti breakdown */}
-                {clientList.length>0&&(<div style={{marginBottom:12}}>
-                  <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:6}}>Clienti</div>
-                  {clientList.slice(0,5).map(function(cl){
-                    return (<div key={cl.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}>
-                      <span style={{textTransform:"capitalize",fontWeight:600}}>{cl.name}</span>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:60,height:4,background:C.bdL,borderRadius:2}}><div style={{height:"100%",borderRadius:2,background:C.ac,width:pct(cl.h/(clientList[0]?clientList[0].h:1)*100),opacity:0.6}}/></div>
-                        <span style={{color:C.tm,minWidth:50,textAlign:"right"}}>{fmtH(cl.h)}</span>
-                      </div>
-                    </div>);
-                  })}
-                </div>)}
-
-                {/* Aree breakdown */}
-                {areaList.length>0&&(<div>
-                  <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:6}}>Aree</div>
-                  {areaList.slice(0,5).map(function(ar){
-                    return (<div key={ar.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}>
-                      <span style={{fontWeight:600}}>{ar.name}</span>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:60,height:4,background:C.bdL,borderRadius:2}}><div style={{height:"100%",borderRadius:2,background:gac(ar.name),width:pct(ar.h/(areaList[0]?areaList[0].h:1)*100),opacity:0.6}}/></div>
-                        <span style={{color:C.tm,minWidth:50,textAlign:"right"}}>{fmtH(ar.h)}</span>
-                      </div>
-                    </div>);
-                  })}
-                </div>)}
-              </div>)}
-            </div>);
-          })}</div>
-        )}
-
         {tab==="team"&&(
           <div>{PL.filter(function(p){return !search||p.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(p){
             var pRecs=records.filter(function(r){return r.user===p.name;});
             var entries=pRecs.length;
             var avgDur=entries>0?p.hours/entries*60:0;
+            var hasMargin=p.revenue>0;
+            var mPos=p.margin>=0;
+            var isOpen=plOpen[p.name];
 
             // Unique tasks
             var taskSet={};pRecs.forEach(function(r){if(r.task)taskSet[r.task]=1;});
@@ -1469,130 +1391,153 @@ export default function App(){
             // Internal hours
             var intH=pRecs.filter(function(r){return r.client==="willab"||!r.client;}).reduce(function(s,r){return s+r.hours;},0);
 
-            return (<div key={p.name} style={{...bx,marginBottom:16}}>
-              {/* Header */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <span style={{width:42,height:42,borderRadius:99,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700}}>{p.name.charAt(0)}</span>
-                  <div>
-                    <div style={{fontSize:16,fontWeight:800}}>{p.name}</div>
-                    <span style={{fontSize:12,color:C.tm}}>{fmtH(p.hours)+" · "+entries+" entries · "+uniqueTasks+" task · "+fmt(p.rate)+"/h"}</span>
+            return (<div key={p.name} style={{...bx,marginBottom:10,overflow:"hidden"}}>
+              {/* Accordion Header */}
+              <div onClick={function(){togglePl(p.name);}} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"2px 0"}}>
+                <span style={{width:32,height:32,borderRadius:9,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>{p.name.charAt(0)}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:700}}>{p.name}</div>
+                  <div style={{fontSize:11,color:C.tm}}>{fmt(p.rate)+"/h · "+p.areas.length+" aree · "+entries+" entries"}{p.isOverhead&&" · Fisso"}</div>
+                </div>
+                <div style={{textAlign:"right",marginRight:6}}>
+                  <div style={{fontSize:16,fontWeight:800}}>{fmtH(p.hours)}</div>
+                  {hasMargin&&<div style={{fontSize:11,fontWeight:700,color:mPos?C.gn:C.rd}}>{(mPos?"+":"")+fmt(p.margin)}</div>}
+                  {!hasMargin&&<div style={{fontSize:11,color:C.tm}}>{fmt(p.totalCost)}</div>}
+                </div>
+                <ChevronDown size={14} color={C.tm} style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}/>
+              </div>
+
+              {/* Accordion Body */}
+              {isOpen&&(<div style={{marginTop:14}}>
+
+                {/* KPI grid: Costo / Ricavo / Margine */}
+                <div style={{display:"grid",gridTemplateColumns:hasMargin?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginBottom:14}}>
+                  <div style={{background:C.amBg,borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:C.am,letterSpacing:".04em",marginBottom:3}}>COSTO</div>
+                    <div style={{fontSize:15,fontWeight:800}}>{fmt(p.totalCost)}</div>
+                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{fmt(p.rate)}/h</div>
+                  </div>
+                  {hasMargin&&<div style={{background:C.blBg,borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:C.bl,letterSpacing:".04em",marginBottom:3}}>RICAVO ATTR.</div>
+                    <div style={{fontSize:15,fontWeight:800}}>{fmt(p.revenue)}</div>
+                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{p.hours>0?fmt(p.revenue/p.hours):0}/h</div>
+                  </div>}
+                  <div style={{background:hasMargin?(mPos?C.gnBg:C.rdBg):"rgba(142,142,147,0.06)",borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:hasMargin?(mPos?C.gn:C.rd):C.td,letterSpacing:".04em",marginBottom:3}}>{hasMargin?"MARGINE":"ORE"}</div>
+                    {hasMargin?(<div style={{fontSize:15,fontWeight:800,color:mPos?C.gn:C.rd}}>{fmt(p.margin)}</div>):(<div style={{fontSize:15,fontWeight:800}}>{fmtH(p.hours)}</div>)}
+                    {hasMargin&&<div style={{fontSize:10,color:mPos?C.gn:C.rd,marginTop:1}}>{(mPos?"+":"")+pct(p.mp)}</div>}
                   </div>
                 </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:20,fontWeight:800}}>{fmt(p.cost)}</div>
-                  {hasWeekend&&<span style={{fontSize:10,color:C.am,background:C.amBg,padding:"2px 8px",borderRadius:99,fontWeight:600}}>Weekend: {fmtH(weekendH)}</span>}
-                </div>
-              </div>
 
-              {/* Mini KPIs */}
-              <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-                <div style={{flex:"1 1 100px",background:C.sf,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.bdL}}>
-                  <div style={{fontSize:9,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>Picco<Tip title="Ora di picco" text="Fascia oraria in cui la persona traccia più ore. Indica quando è più produttiva."/></div>
-                  <div style={{fontSize:15,fontWeight:800,color:C.bl}}>{peakHour+":00"}</div>
+                {/* Mini KPIs row */}
+                <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+                  <div style={{flex:"1 1 70px",background:C.sf,borderRadius:8,padding:"7px 8px",border:"1px solid "+C.bdL,textAlign:"center"}}>
+                    <div style={{fontSize:8,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".05em"}}>Picco</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.bl}}>{peakHour+":00"}</div>
+                  </div>
+                  <div style={{flex:"1 1 70px",background:C.sf,borderRadius:8,padding:"7px 8px",border:"1px solid "+C.bdL,textAlign:"center"}}>
+                    <div style={{fontSize:8,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".05em"}}>Media</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.or}}>{Math.round(avgDur)+"m"}</div>
+                  </div>
+                  <div style={{flex:"1 1 70px",background:C.sf,borderRadius:8,padding:"7px 8px",border:"1px solid "+C.bdL,textAlign:"center"}}>
+                    <div style={{fontSize:8,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".05em"}}>Descr.</div>
+                    <div style={{fontSize:14,fontWeight:800,color:descPct>=70?C.gn:descPct>=30?C.am:C.rd}}>{descPct+"%"}</div>
+                  </div>
+                  <div style={{flex:"1 1 70px",background:C.sf,borderRadius:8,padding:"7px 8px",border:"1px solid "+C.bdL,textAlign:"center"}}>
+                    <div style={{fontSize:8,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".05em"}}>Interne</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.sl}}>{fmtH(intH)}</div>
+                  </div>
+                  {hasWeekend&&<div style={{flex:"1 1 70px",background:C.amBg,borderRadius:8,padding:"7px 8px",border:"1px solid "+C.am+"22",textAlign:"center"}}>
+                    <div style={{fontSize:8,color:C.am,fontWeight:600,textTransform:"uppercase",letterSpacing:".05em"}}>Weekend</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.am}}>{fmtH(weekendH)}</div>
+                  </div>}
                 </div>
-                <div style={{flex:"1 1 100px",background:C.sf,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.bdL}}>
-                  <div style={{fontSize:9,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>Media entry<Tip title="Durata media" text="Media della durata di ogni singola entry. Entry brevi (sotto 30m) indicano frammentazione, entry lunghe (oltre 90m) indicano focus prolungato."/></div>
-                  <div style={{fontSize:15,fontWeight:800,color:C.or}}>{Math.round(avgDur)+"m"}</div>
-                </div>
-                <div style={{flex:"1 1 100px",background:C.sf,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.bdL}}>
-                  <div style={{fontSize:9,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>Descrizioni<Tip title="Descrizioni" text="% di entry con descrizione compilata. Indica la qualità del time tracking: verde oltre 70%, giallo oltre 30%, rosso sotto."/></div>
-                  <div style={{fontSize:15,fontWeight:800,color:descPct>=70?C.gn:descPct>=30?C.am:C.rd}}>{descPct+"%"}</div>
-                </div>
-                <div style={{flex:"1 1 100px",background:C.sf,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.bdL}}>
-                  <div style={{fontSize:9,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>Specializzazione<Tip title="Specializzazione" text="% ore dedicate allarea principale. Alto = molto specializzato, basso = generalista su più aree."/></div>
-                  <div style={{fontSize:15,fontWeight:800,color:C.pk}}>{specialPct+"%"}<span style={{fontSize:10,color:C.tm,fontWeight:400,marginLeft:4}}>{topArea?topArea.name:""}</span></div>
-                </div>
-                <div style={{flex:"1 1 100px",background:C.sf,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.bdL}}>
-                  <div style={{fontSize:9,color:C.tm,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>Ore interne<Tip title="Ore interne" text="Ore su task [willab] senza fee — riunioni, admin, formazione. Un valore alto indica molto overhead."/></div>
-                  <div style={{fontSize:15,fontWeight:800,color:C.sl}}>{fmtH(intH)}<span style={{fontSize:10,color:C.tm,fontWeight:400,marginLeft:4}}>{pct(p.hours>0?intH/p.hours*100:0)}</span></div>
-                </div>
-              </div>
 
-              {/* Hour heatmap */}
-              <div style={{marginBottom:14}}>
-                <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Distribuzione oraria</div>
-                <div style={{display:"flex",gap:2,alignItems:"flex-end",height:40}}>
-                  {hourDist.map(function(v,i){
-                    var maxH=Math.max.apply(null,hourDist);
-                    var barH=maxH>0?Math.max(v/maxH*36,v>0?3:0):0;
-                    var active=i>=7&&i<=20;
-                    return (<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                      <div style={{width:"100%",height:barH,background:i===peakHour?C.bl:(v>0?C.ac+"66":C.bl),borderRadius:2,transition:"height .3s"}}/>
-                      {i%3===0&&<span style={{fontSize:7,color:active?C.tm:C.td}}>{i}</span>}
-                    </div>);
-                  })}
+                {/* Hour heatmap */}
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Distribuzione oraria</div>
+                  <div style={{display:"flex",gap:2,alignItems:"flex-end",height:36}}>
+                    {hourDist.map(function(v,i){
+                      var maxH=Math.max.apply(null,hourDist);
+                      var barH2=maxH>0?Math.max(v/maxH*32,v>0?3:0):0;
+                      return (<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                        <div style={{width:"100%",height:barH2,background:i===peakHour?C.bl:(v>0?C.ac+"66":C.bl),borderRadius:2}}/>
+                        {i%3===0&&<span style={{fontSize:7,color:C.tm}}>{i}</span>}
+                      </div>);
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Weekday distribution */}
-              <div style={{marginBottom:14}}>
-                <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Distribuzione settimanale</div>
-                <div style={{display:"flex",gap:4}}>
-                  {[1,2,3,4,5,6,0].map(function(d){
-                    var maxD=Math.max.apply(null,dayDist);
-                    var val=dayDist[d];
-                    var barH=maxD>0?Math.max(val/maxD*28,val>0?3:0):0;
-                    var isWe=d===0||d===6;
-                    return (<div key={d} style={{flex:1,textAlign:"center"}}>
-                      <div style={{height:32,display:"flex",alignItems:"flex-end",justifyContent:"center",marginBottom:3}}>
-                        <div style={{width:"80%",height:barH,background:isWe?(val>0?C.am:C.bl):C.ac+"88",borderRadius:2}}/>
-                      </div>
-                      <div style={{fontSize:9,color:isWe?C.am:C.tm,fontWeight:600}}>{dayNames[d]}</div>
-                      {val>0&&<div style={{fontSize:8,color:C.tm}}>{fmtH(val)}</div>}
-                    </div>);
-                  })}
+                {/* Weekday distribution */}
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Distribuzione settimanale</div>
+                  <div style={{display:"flex",gap:4}}>
+                    {[1,2,3,4,5,6,0].map(function(d){
+                      var maxD=Math.max.apply(null,dayDist);
+                      var val=dayDist[d];
+                      var barH3=maxD>0?Math.max(val/maxD*28,val>0?3:0):0;
+                      var isWe=d===0||d===6;
+                      return (<div key={d} style={{flex:1,textAlign:"center"}}>
+                        <div style={{height:32,display:"flex",alignItems:"flex-end",justifyContent:"center",marginBottom:3}}>
+                          <div style={{width:"80%",height:barH3,background:isWe?(val>0?C.am:C.bl):C.ac+"88",borderRadius:2}}/>
+                        </div>
+                        <div style={{fontSize:9,color:isWe?C.am:C.tm,fontWeight:600}}>{dayNames[d]}</div>
+                        {val>0&&<div style={{fontSize:8,color:C.tm}}>{fmtH(val)}</div>}
+                      </div>);
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Two columns: Areas + Clients */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div>
-                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Aree</div>
-                  {areaList.slice(0,6).map(function(a){
-                    return (<div key={a.name} style={{marginBottom:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                        <span style={{fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:99,background:gac(a.name)}}/>{a.name}</span>
-                        <span style={{fontSize:11,fontWeight:700,color:gac(a.name)}}>{fmtH(a.h)}</span>
-                      </div>
-                      <Bar value={a.h} max={topArea?topArea.h:1} color={gac(a.name)} h={4}/>
-                    </div>);
-                  })}
+                {/* Two columns: Areas + Clients */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div>
+                    <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Aree</div>
+                    {areaList.slice(0,6).map(function(a){
+                      return (<div key={a.name} style={{marginBottom:6}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:99,background:gac(a.name)}}/>{a.name}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:gac(a.name)}}>{fmtH(a.h)}</span>
+                        </div>
+                        <Bar value={a.h} max={topArea?topArea.h:1} color={gac(a.name)} h={4}/>
+                      </div>);
+                    })}
+                  </div>
+                  <div>
+                    <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Clienti</div>
+                    {clientList.length===0&&<div style={{fontSize:11,color:C.td,fontStyle:"italic"}}>Solo ore interne</div>}
+                    {clientList.slice(0,6).map(function(c,ci){
+                      return (<div key={c.name} style={{marginBottom:6}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:11,fontWeight:600,textTransform:"capitalize",display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:99,background:gcc(ci)}}/>{c.name}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:gcc(ci)}}>{fmtH(c.h)}</span>
+                        </div>
+                        <Bar value={c.h} max={clientList[0]?clientList[0].h:1} color={gcc(ci)} h={4}/>
+                      </div>);
+                    })}
+                  </div>
                 </div>
-                <div>
-                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Clienti</div>
-                  {clientList.length===0&&<div style={{fontSize:11,color:C.td,fontStyle:"italic"}}>Solo ore interne</div>}
-                  {clientList.slice(0,6).map(function(c,ci){
-                    return (<div key={c.name} style={{marginBottom:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                        <span style={{fontSize:11,fontWeight:600,textTransform:"capitalize",display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:99,background:gcc(ci)}}/>{c.name}</span>
-                        <span style={{fontSize:11,fontWeight:700,color:gcc(ci)}}>{fmtH(c.h)}</span>
-                      </div>
-                      <Bar value={c.h} max={clientList[0]?clientList[0].h:1} color={gcc(ci)} h={4}/>
-                    </div>);
-                  })}
-                </div>
-              </div>
 
-              {/* Monthly trend for this person */}
-              {allMonths.length>1&&(<div style={{marginTop:14}}>
-                <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Trend mensile</div>
-                <div style={{display:"flex",gap:6,alignItems:"flex-end",height:50}}>
-                  {monthlyAgg.map(function(m){
-                    var ph=m.pp[p.name]||0;
-                    var maxPH=Math.max.apply(null,monthlyAgg.map(function(x){return x.pp[p.name]||0;}));
-                    var barH=maxPH>0?Math.max(ph/maxPH*36,ph>0?3:0):0;
-                    var prevIdx=allMonths.indexOf(m.mk)-1;
-                    var prevH=prevIdx>=0&&monthlyAgg[prevIdx]?monthlyAgg[prevIdx].pp[p.name]||0:0;
-                    var delta=prevH>0?((ph-prevH)/prevH*100):0;
-                    return (<div key={m.mk} style={{flex:1,textAlign:"center"}}>
-                      <div style={{fontSize:10,fontWeight:700,color:C.bl}}>{ph>0?fmtH(ph):""}</div>
-                      <div style={{height:barH,background:C.ac+"77",borderRadius:3,marginTop:2,marginBottom:4}}/>
-                      <div style={{fontSize:9,color:C.tm}}>{m.label.split(" ")[0].slice(0,3)}</div>
-                      {prevH>0&&Math.abs(delta)>10&&<div style={{fontSize:8,color:delta>0?C.gn:C.rd}}>{(delta>0?"↑":"↓")+Math.round(Math.abs(delta))+"%"}</div>}
-                    </div>);
-                  })}
-                </div>
+                {/* Monthly trend */}
+                {allMonths.length>1&&(<div style={{marginTop:14}}>
+                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Trend mensile</div>
+                  <div style={{display:"flex",gap:6,alignItems:"flex-end",height:50}}>
+                    {monthlyAgg.map(function(m){
+                      var ph=m.pp[p.name]||0;
+                      var maxPH=Math.max.apply(null,monthlyAgg.map(function(x){return x.pp[p.name]||0;}));
+                      var barH4=maxPH>0?Math.max(ph/maxPH*36,ph>0?3:0):0;
+                      var prevIdx=allMonths.indexOf(m.mk)-1;
+                      var prevH=prevIdx>=0&&monthlyAgg[prevIdx]?monthlyAgg[prevIdx].pp[p.name]||0:0;
+                      var delta=prevH>0?((ph-prevH)/prevH*100):0;
+                      return (<div key={m.mk} style={{flex:1,textAlign:"center"}}>
+                        <div style={{fontSize:10,fontWeight:700,color:C.bl}}>{ph>0?fmtH(ph):""}</div>
+                        <div style={{height:barH4,background:C.ac+"77",borderRadius:3,marginTop:2,marginBottom:4}}/>
+                        <div style={{fontSize:9,color:C.tm}}>{m.label.split(" ")[0].slice(0,3)}</div>
+                        {prevH>0&&Math.abs(delta)>10&&<div style={{fontSize:8,color:delta>0?C.gn:C.rd}}>{(delta>0?"↑":"↓")+Math.round(Math.abs(delta))+"%"}</div>}
+                      </div>);
+                    })}
+                  </div>
+                </div>)}
+
               </div>)}
             </div>);
           })}</div>
