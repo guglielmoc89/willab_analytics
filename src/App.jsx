@@ -161,6 +161,8 @@ export default function App(){
   var _cm=useState(""),cfgM=_cm[0],setCfgM=_cm[1];
   var _po=useState({clients:true,areas:false,people:false,trend:false}),profOpen=_po[0],setProfOpen=_po[1];
   var toggleProf=function(k){setProfOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
+  var _co=useState({internal:false,costs:true,fees:true,extras:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
+  var toggleCfg=function(k){setCfgOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
   var _sync=useState("idle"),syncSt=_sync[0],setSyncSt=_sync[1];
   var _search=useState(""),search=_search[0],setSearch=_search[1];
   var fr=useRef(null);
@@ -1330,125 +1332,138 @@ export default function App(){
         {/* CONFIG */}
         {tab==="config"&&cm&&(
           <div>
+            {/* Month selector */}
             <div style={{...bx,padding:"14px 20px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-              <span style={{fontSize:14,fontWeight:700}}>📅 Mese</span>
-              <div style={{display:"flex",gap:4}}>{allMonths.map(function(mk){return (<Pill key={mk} sm on={cm===mk} clr={C.am} onClick={function(){setCfgM(mk);}}>{getML(mk)}</Pill>);})}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><Calendar size={14} strokeWidth={2.2} color={C.ac}/><span style={{fontSize:14,fontWeight:700}}>Mese</span></div>
+              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{allMonths.map(function(mk){return (<Pill key={mk} sm on={cm===mk} onClick={function(){setCfgM(mk);}}>{getML(mk)}</Pill>);})}</div>
+              {cfgHasNxt&&<button onClick={function(){copyNext(cm);}} style={{background:C.acL,border:"1px solid "+C.ac+"44",borderRadius:9,padding:"6px 14px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{"Copia tutto a "+getML(nextMK(cm))+" →"}</button>}
             </div>
 
-            {/* INTERNAL CLIENTS */}
-            <div style={{...bx,marginBottom:14}}>
-              <ST>{"🏢 Clienti interni"}</ST>
-              <p style={{color:C.tm,fontSize:12,marginTop:-10,marginBottom:14}}>I clienti interni non hanno fee e non appaiono negli alert.</p>
+            {/* 1. CLIENTI INTERNI */}
+            <Accordion icon={Home} title="Clienti interni" badge={allClients.filter(function(c){return isInternal(c);}).length+"/"+allClients.length} open={cfgOpen.internal} onToggle={function(){toggleCfg("internal");}}>
+              <p style={{color:C.tm,fontSize:12,marginBottom:12}}>I clienti interni non richiedono fee e non appaiono negli alert.</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                 {allClients.map(function(c){
                   var isI=isInternal(c);
                   return (<button key={c} onClick={function(){setInternal(c,!isI);}} style={{padding:"6px 12px",borderRadius:8,fontSize:12,fontWeight:600,border:"1px solid "+(isI?C.sl:C.bd),background:isI?"rgba(142,142,147,0.1)":"transparent",color:isI?C.sl:C.tm,cursor:"pointer",fontFamily:"inherit",textTransform:"capitalize",display:"flex",alignItems:"center",gap:4}}>
-                    {isI&&<Home size={12} strokeWidth={2.2}/>}
+                    {isI&&<Check size={12} strokeWidth={2.5}/>}
                     {c}
                   </button>);
                 })}
               </div>
-            </div>
+            </Accordion>
 
-            <div style={{...bx,marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <ST>{"💰 Costi team — "+getML(cm)}</ST>
-                {cfgHasNxt&&<button onClick={function(){copyNext(cm);}} style={{background:C.acL,border:"1px solid "+C.ac+"44",borderRadius:8,padding:"6px 14px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{"Copia a "+getML(nextMK(cm))+" →"}</button>}
-              </div>
-              <p style={{color:C.tm,fontSize:12,marginTop:-10,marginBottom:14}}>Costo lordo aziendale mensile. "Costo fisso" = il compenso pesa sul margine generale ma non sui singoli clienti.</p>
-              {people.map(function(p){
-                var h=allRec.filter(function(r){return r.user===p&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
-                var mc=cfgCosts[p]||0;
-                var rate=h>0?mc/h:0;
-                var active=h>0;
-                var excluded=isOverhead(p);
-                return (<div key={p} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.bdL,opacity:active?1:0.35}}>
-                  <span style={{width:22,height:22,borderRadius:99,background:excluded?"rgba(142,142,147,0.1)":C.acL,color:excluded?C.sl:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0}}>{p.charAt(0)}</span>
-                  <span style={{flex:1,fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}{excluded&&<span style={{fontSize:9,color:C.am,marginLeft:4}}>costo fisso</span>}</span>
-                  <button onClick={function(){setOverhead(p,!excluded);}} title={excluded?"Le ore peseranno sui clienti":"Il compenso peserà solo sul margine generale"} style={{padding:"3px 7px",borderRadius:6,fontSize:10,fontWeight:600,border:"1px solid "+(excluded?C.am:C.bd),background:excluded?C.amBg:"transparent",color:excluded?C.am:C.td,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{excluded?"Fisso":"Variabile"}</button>
-                  <span style={{fontSize:12,color:C.tm,width:50,textAlign:"center"}}>{h>0?fmtH(h):"—"}</span>
-                  <div style={{position:"relative",width:100}}>
-                    <input type="number" min="0" step="100" value={mc||""} onChange={function(e){sc(p,cm,parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:24,textAlign:"right"}} placeholder="0"/>
-                    <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11}}>€</span>
-                  </div>
-                  <span style={{fontSize:12,color:rate>0?C.ac:C.td,fontWeight:600,width:70,textAlign:"right"}}>{rate>0?fmt(rate)+"/h":"—"}</span>
-                </div>);
-              })}
-            </div>
-
-            <div style={{...bx,marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <ST>{"🎯 Fee clienti — "+getML(cm)}</ST>
-                {cfgHasNxt&&<button onClick={function(){copyNext(cm);}} style={{background:C.acL,border:"1px solid "+C.ac+"44",borderRadius:8,padding:"6px 14px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{"Copia a "+getML(nextMK(cm))+" →"}</button>}
-              </div>
-              <p style={{color:C.tm,fontSize:11,marginTop:-10,marginBottom:12}}>💡 Mensile si eredita ai mesi successivi. One-shot si distribuisce sulle ore totali del cliente. Si sommano.</p>
-              {extClients.map(function(c,ci){
-                var raw=cfgFees[c];var norm=gfNorm(raw);
-                var inheritedM=!norm.monthly&&gfMonthly(c,cm)>0;
-                var h=allRec.filter(function(r){return r.client===c&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
-                return (<div key={c} style={{padding:"10px 0",borderBottom:"1px solid "+C.bdL,opacity:h>0?1:0.35}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                    <span style={{width:8,height:8,borderRadius:99,background:gcc(ci),flexShrink:0}}/>
-                    <span style={{flex:1,fontSize:13,fontWeight:600,textTransform:"capitalize"}}>{c}{inheritedM&&<span style={{fontSize:9,color:C.ac,marginLeft:4}}>↑ ereditata</span>}</span>
-                    <span style={{fontSize:12,color:C.tm}}>{h>0?fmtH(h):"—"}</span>
-                  </div>
-                  <div style={{display:"flex",gap:8,paddingLeft:16}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,fontWeight:600,color:C.ac,marginBottom:3}}>MENSILE</div>
-                      <div style={{position:"relative"}}>
-                        <input type="number" min="0" step="100" value={norm.monthly||""} onChange={function(e){sf(c,cm,"monthly",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:28,textAlign:"right",fontSize:12}} placeholder={inheritedM?fmt(gfMonthly(c,cm)):"0"}/>
-                        <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:10}}>€/m</span>
+            {/* 2. COSTI TEAM */}
+            <Accordion icon={Users} title={"Costi team — "+getML(cm)} badge={people.length+" persone"} open={cfgOpen.costs} onToggle={function(){toggleCfg("costs");}}>
+              <p style={{color:C.tm,fontSize:12,marginBottom:12}}>Costo lordo aziendale mensile. "Fisso" = pesa sul margine generale, non sui clienti.</p>
+              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}>
+                <thead><tr>
+                  <th style={{textAlign:"left",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11}}>Persona</th>
+                  <th style={{textAlign:"center",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:50}}>Ore</th>
+                  <th style={{textAlign:"center",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:60}}>Tipo</th>
+                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:100}}>Costo €</th>
+                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:65}}>€/h</th>
+                </tr></thead>
+                <tbody>{people.map(function(p){
+                  var h=allRec.filter(function(r){return r.user===p&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
+                  var mc=cfgCosts[p]||0;
+                  var rate=h>0&&!isOverhead(p)?mc/h:0;
+                  var overhead=isOverhead(p);
+                  return (<tr key={p} style={{opacity:h>0?1:0.35}}>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,fontWeight:600}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{width:22,height:22,borderRadius:99,background:overhead?"rgba(142,142,147,0.1)":C.acL,color:overhead?C.sl:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0}}>{p.charAt(0)}</span>
+                        {p}
                       </div>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,fontWeight:600,color:C.am,marginBottom:3}}>ONE-SHOT</div>
+                    </td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"center",color:C.tm,fontSize:12}}>{h>0?fmtH(h):"—"}</td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"center"}}>
+                      <button onClick={function(){setOverhead(p,!overhead);}} style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,border:"1px solid "+(overhead?C.am:C.bd),background:overhead?C.amBg:"transparent",color:overhead?C.am:C.td,cursor:"pointer",fontFamily:"inherit"}}>{overhead?"Fisso":"Var."}</button>
+                    </td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL}}>
                       <div style={{position:"relative"}}>
-                        <input type="number" min="0" step="100" value={norm.oneshot||""} onChange={function(e){sf(c,cm,"oneshot",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:20,textAlign:"right",fontSize:12}} placeholder="0"/>
-                        <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:10}}>€</span>
+                        <input type="number" min="0" step="100" value={mc||""} onChange={function(e){sc(p,cm,parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:20,textAlign:"right",fontSize:12}} placeholder="0"/>
+                        <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
                       </div>
-                    </div>
-                  </div>
-                </div>);
-              })}
-            </div>
+                    </td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"right",color:overhead?C.am:rate>0?C.ac:C.td,fontWeight:600,fontSize:12}}>{overhead?"fisso":rate>0?fmt(rate)+"/h":"—"}</td>
+                  </tr>);
+                })}</tbody>
+              </table>
+            </Accordion>
 
-            {/* COSTI EXTRA */}
-            <div style={{...bx,marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <ST>{"📎 Costi extra — "+getML(cm)}</ST>
-                <button onClick={function(){addExtra(cm);}} style={{background:C.or+"18",border:"1px solid "+C.or+"44",borderRadius:8,padding:"6px 14px",color:C.or,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ Aggiungi</button>
+            {/* 3. FEE CLIENTI */}
+            <Accordion icon={Tag} title={"Fee clienti — "+getML(cm)} badge={extClients.length+" clienti"} open={cfgOpen.fees} onToggle={function(){toggleCfg("fees");}}>
+              <p style={{color:C.tm,fontSize:12,marginBottom:12}}>Mensile si eredita. One-shot si distribuisce sulle ore. Si sommano.</p>
+              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}>
+                <thead><tr>
+                  <th style={{textAlign:"left",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11}}>Cliente</th>
+                  <th style={{textAlign:"center",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:50}}>Ore</th>
+                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.ac,fontWeight:600,fontSize:11,width:110}}>Mensile €/m</th>
+                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.am,fontWeight:600,fontSize:11,width:110}}>One-shot €</th>
+                </tr></thead>
+                <tbody>{extClients.map(function(c,ci){
+                  var raw=cfgFees[c];var norm=gfNorm(raw);
+                  var inheritedM=!norm.monthly&&gfMonthly(c,cm)>0;
+                  var h=allRec.filter(function(r){return r.client===c&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
+                  return (<tr key={c} style={{opacity:h>0?1:0.35}}>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,fontWeight:600,textTransform:"capitalize"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{width:8,height:8,borderRadius:99,background:gcc(ci),flexShrink:0}}/>
+                        {c}
+                        {inheritedM&&<span style={{fontSize:9,color:C.ac}}>↑</span>}
+                      </div>
+                    </td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"center",color:C.tm,fontSize:12}}>{h>0?fmtH(h):"—"}</td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL}}>
+                      <div style={{position:"relative"}}>
+                        <input type="number" min="0" step="100" value={norm.monthly||""} onChange={function(e){sf(c,cm,"monthly",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:24,textAlign:"right",fontSize:12}} placeholder={inheritedM?Math.round(gfMonthly(c,cm)):"0"}/>
+                        <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€/m</span>
+                      </div>
+                    </td>
+                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL}}>
+                      <div style={{position:"relative"}}>
+                        <input type="number" min="0" step="100" value={norm.oneshot||""} onChange={function(e){sf(c,cm,"oneshot",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:16,textAlign:"right",fontSize:12}} placeholder="0"/>
+                        <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
+                      </div>
+                    </td>
+                  </tr>);
+                })}</tbody>
+              </table>
+            </Accordion>
+
+            {/* 4. COSTI EXTRA */}
+            <Accordion icon={DollarSign} title={"Costi extra — "+getML(cm)} badge={getExtras(cm).length>0?getExtras(cm).length+" voci":"vuoto"} open={cfgOpen.extras} onToggle={function(){toggleCfg("extras");}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <p style={{color:C.tm,fontSize:12,margin:0}}>Shooting, trasferte, licenze, costi generali.</p>
+                <button onClick={function(){addExtra(cm);}} style={{background:C.or+"18",border:"1px solid "+C.or+"44",borderRadius:8,padding:"5px 12px",color:C.or,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3}}><Plus size={12}/> Aggiungi</button>
               </div>
-              <p style={{color:C.tm,fontSize:12,marginTop:-10,marginBottom:14}}>Shooting, trasferte, licenze, costi generali.</p>
-              {getExtras(cm).length===0&&<div style={{fontSize:12,color:C.td,fontStyle:"italic",padding:"10px 0"}}>Nessun costo extra per questo mese.</div>}
+              {getExtras(cm).length===0&&<div style={{fontSize:12,color:C.td,fontStyle:"italic",padding:"10px 0",textAlign:"center"}}>Nessun costo extra</div>}
               {getExtras(cm).map(function(ex,idx){
                 return (<div key={idx} style={{padding:"10px 0",borderBottom:"1px solid "+C.bdL,display:"flex",flexDirection:"column",gap:8}}>
-                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                    {/* Type selector */}
-                    {[["client","🏷 Cliente"],["recurring_client","🔄 Ricorrente cliente"],["person","👤 Persona"],["general","🏢 Generale"]].map(function(t){
+                  <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                    {[["client","Cliente"],["recurring_client","Ricorrente"],["person","Persona"],["general","Generale"]].map(function(t){
                       return (<button key={t[0]} onClick={function(){updateExtra(cm,idx,"type",t[0]);}} style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,border:"1px solid "+(ex.type===t[0]?C.or:C.bd),background:ex.type===t[0]?C.or+"18":"transparent",color:ex.type===t[0]?C.or:C.tm,cursor:"pointer",fontFamily:"inherit"}}>{t[1]}</button>);
                     })}
-                    <button onClick={function(){removeExtra(cm,idx);}} style={{marginLeft:"auto",background:"transparent",border:"1px solid "+C.rd+"44",borderRadius:6,padding:"3px 8px",color:C.rd,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+                    <button onClick={function(){removeExtra(cm,idx);}} style={{marginLeft:"auto",background:"transparent",border:"none",color:C.rd,fontSize:14,cursor:"pointer",padding:"2px 6px"}}>✕</button>
                   </div>
-                  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                    {/* Client/Person selector */}
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                     {(ex.type==="client"||ex.type==="recurring_client")&&(
-                      <select value={ex.client||""} onChange={function(e){updateExtra(cm,idx,"client",e.target.value);}} style={{...ix,width:160,fontSize:12,textTransform:"capitalize"}}>
-                        <option value="">Seleziona cliente</option>
+                      <select value={ex.client||""} onChange={function(e){updateExtra(cm,idx,"client",e.target.value);}} style={{...ix,width:140,fontSize:11,textTransform:"capitalize"}}>
+                        <option value="">Cliente...</option>
                         {extClients.map(function(c){return (<option key={c} value={c}>{c}</option>);})}
                       </select>
                     )}
                     {ex.type==="person"&&(
-                      <select value={ex.person||""} onChange={function(e){updateExtra(cm,idx,"person",e.target.value);}} style={{...ix,width:160,fontSize:12}}>
-                        <option value="">Seleziona persona</option>
+                      <select value={ex.person||""} onChange={function(e){updateExtra(cm,idx,"person",e.target.value);}} style={{...ix,width:140,fontSize:11}}>
+                        <option value="">Persona...</option>
                         {people.map(function(p){return (<option key={p} value={p}>{p}</option>);})}
                       </select>
                     )}
-                    {/* Description */}
-                    <input type="text" value={ex.desc||""} onChange={function(e){updateExtra(cm,idx,"desc",e.target.value);}} placeholder="Descrizione (es. Shooting, Trasferta...)" style={{...ix,flex:1,minWidth:140,fontSize:12}}/>
-                    {/* Amount */}
-                    <div style={{position:"relative",width:90}}>
-                      <input type="number" min="0" step="50" value={ex.amount||""} onChange={function(e){updateExtra(cm,idx,"amount",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:24,textAlign:"right"}} placeholder="0"/>
-                      <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:10}}>€</span>
+                    <input type="text" value={ex.desc||""} onChange={function(e){updateExtra(cm,idx,"desc",e.target.value);}} placeholder="Descrizione..." style={{...ix,flex:1,minWidth:120,fontSize:11}}/>
+                    <div style={{position:"relative",width:80}}>
+                      <input type="number" min="0" step="50" value={ex.amount||""} onChange={function(e){updateExtra(cm,idx,"amount",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:18,textAlign:"right",fontSize:12}} placeholder="0"/>
+                      <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
                     </div>
                   </div>
                 </div>);
@@ -1456,13 +1471,13 @@ export default function App(){
               {getExtras(cm).length>0&&(function(){
                 var tot=getExtras(cm).reduce(function(s,ex){return s+(ex.amount||0);},0);
                 return (<div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontWeight:700,fontSize:13}}>
-                  <span style={{color:C.tm}}>Totale extra</span>
+                  <span style={{color:C.tm}}>Totale</span>
                   <span style={{color:C.or}}>{fmt(tot)}</span>
                 </div>);
               })()}
-            </div>
+            </Accordion>
 
-            <div style={{...bx,padding:12,background:C.gn+"08",borderColor:C.gn+"22"}}><span style={{fontSize:12,color:C.gn}}>✓ Salvato automaticamente</span></div>
+            <div style={{...bx,padding:12,background:C.gn+"08",borderColor:C.gn+"22"}}><span style={{fontSize:12,color:C.gn}}>✓ Salvato automaticamente nel cloud</span></div>
           </div>
         )}
 
