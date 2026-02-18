@@ -172,6 +172,8 @@ export default function App(){
   var toggleCl=function(name){setClOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _plOpen=useState({}),plOpen=_plOpen[0],setPlOpen=_plOpen[1];
   var togglePl=function(name){setPlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
+  var _crNotes=useState({}),crNotes=_crNotes[0],setCrNotes=_crNotes[1];
+  var setCrNote=function(client,val){setCrNotes(function(prev){var n=Object.assign({},prev);n[client]=val;return n;});};
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -825,6 +827,162 @@ export default function App(){
     var a=document.createElement("a");a.href=url;a.download="Willab-Export-"+pLabel.replace(/\s+/g,"-")+".tsv";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   };
 
+  // ═══ CLIENT REPORT ═══
+  var generateClientReport=function(clientName,notes){
+    var cRecs=records.filter(function(r){return r.client===clientName;});
+    if(!cRecs.length){alert("Nessun dato per questo cliente nel periodo.");return;}
+    
+    // Aggregate by area
+    var byArea={};
+    cRecs.forEach(function(r){
+      if(!byArea[r.area])byArea[r.area]={h:0,tasks:{}};
+      byArea[r.area].h+=r.hours;
+      if(r.task)byArea[r.area].tasks[r.task]=1;
+    });
+    var areas=Object.keys(byArea).map(function(a){return {name:a,h:byArea[a].h,tasks:Object.keys(byArea[a].tasks)};}).sort(function(a,b){return b.h-a.h;});
+    var totalH=cRecs.reduce(function(s,r){return s+r.hours;},0);
+
+    // People involved
+    var pSet={};cRecs.forEach(function(r){pSet[r.user]=1;});
+    var peopleList=Object.keys(pSet);
+
+    // Period label
+    var dates=cRecs.map(function(r){return r.date;}).sort();
+    var periodStr=dates.length>0?dates[0].split("T")[0]+" — "+dates[dates.length-1].split("T")[0]:"";
+
+    // Colors for areas
+    var areaColors=["#7C5CFC","#AF52DE","#FF9500","#34C759","#007AFF","#FF3B30","#5856D6","#FF2D55","#00C7BE","#FF6482"];
+
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>';
+    html+='<title>Report — '+clientName+'</title>';
+    html+='<style>';
+    html+='*{margin:0;padding:0;box-sizing:border-box}';
+    html+='body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;background:#f8f8fa;color:#1c1c1e;padding:32px 24px;max-width:680px;margin:0 auto;-webkit-font-smoothing:antialiased}';
+    html+='.header{text-align:center;margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid #e5e5ea}';
+    html+='.header h1{font-size:28px;font-weight:800;letter-spacing:-.03em;margin-bottom:6px;text-transform:capitalize}';
+    html+='.header .period{font-size:14px;color:#8e8e93;margin-bottom:4px}';
+    html+='.header .meta{font-size:13px;color:#aeaeb2}';
+    html+='.section{margin-bottom:32px}';
+    html+='.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8e8e93;margin-bottom:14px}';
+    html+='.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px}';
+    html+='.kpi{background:#fff;border-radius:14px;padding:18px 16px;text-align:center;border:1px solid #e5e5ea}';
+    html+='.kpi .label{font-size:11px;font-weight:700;color:#8e8e93;letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase}';
+    html+='.kpi .value{font-size:28px;font-weight:800;color:#1c1c1e}';
+    html+='.kpi .sub{font-size:12px;color:#aeaeb2;margin-top:2px}';
+    html+='.area-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:10px;border:1px solid #e5e5ea}';
+    html+='.area-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}';
+    html+='.area-name{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}';
+    html+='.area-dot{width:10px;height:10px;border-radius:3px}';
+    html+='.area-hours{font-size:14px;font-weight:700;color:#8e8e93}';
+    html+='.area-bar{height:6px;border-radius:3px;background:#f2f2f7;margin-bottom:10px}';
+    html+='.area-bar-fill{height:100%;border-radius:3px;transition:width .3s}';
+    html+='.area-pct{font-size:12px;font-weight:600;color:#aeaeb2;margin-bottom:8px}';
+    html+='.task-list{font-size:13px;color:#636366;line-height:1.7}';
+    html+='.task-item{padding:2px 0;display:flex;align-items:center;gap:6px}';
+    html+='.task-bullet{width:4px;height:4px;border-radius:99px;background:#c7c7cc;flex-shrink:0}';
+    html+='.chart-container{background:#fff;border-radius:14px;padding:20px;border:1px solid #e5e5ea;margin-bottom:28px}';
+    html+='.pie-row{display:flex;align-items:center;gap:20px}';
+    html+='.pie-svg{width:120px;height:120px;flex-shrink:0}';
+    html+='.pie-legend{flex:1}';
+    html+='.pie-legend-item{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}';
+    html+='.pie-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}';
+    html+='.notes-box{background:#fff;border-radius:14px;padding:20px;border:1px solid #e5e5ea;font-size:14px;line-height:1.7;color:#3a3a3c;white-space:pre-wrap}';
+    html+='.footer{text-align:center;margin-top:40px;padding-top:24px;border-top:1px solid #e5e5ea;font-size:11px;color:#c7c7cc}';
+    html+='@media print{body{padding:20px;background:#fff}.area-card,.kpi,.chart-container,.notes-box{break-inside:avoid}@page{margin:1.5cm}}';
+    html+='</style></head><body>';
+
+    // Header
+    html+='<div class="header">';
+    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);margin:0 auto 14px;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:16px;font-weight:800">W</span></div>';
+    html+='<h1>'+clientName+'</h1>';
+    html+='<div class="period">Report attività — '+periodStr+'</div>';
+    html+='<div class="meta">Generato il '+(new Date().toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"}))+'</div>';
+    html+='</div>';
+
+    // KPIs
+    html+='<div class="kpi-grid">';
+    html+='<div class="kpi"><div class="label">Ore totali</div><div class="value">'+fmtH(totalH)+'</div></div>';
+    html+='<div class="kpi"><div class="label">Team coinvolto</div><div class="value">'+peopleList.length+'</div><div class="sub">'+peopleList.join(", ")+'</div></div>';
+    html+='<div class="kpi"><div class="label">Aree di attività</div><div class="value">'+areas.length+'</div></div>';
+    html+='<div class="kpi"><div class="label">Attività svolte</div><div class="value">'+cRecs.reduce(function(s,r){return r.task?s+1:s;},0)+'</div><div class="sub">task tracciati</div></div>';
+    html+='</div>';
+
+    // Pie chart SVG
+    html+='<div class="chart-container"><div class="section-title">Distribuzione ore per area</div><div class="pie-row">';
+    // Build SVG pie
+    html+='<svg class="pie-svg" viewBox="0 0 120 120">';
+    var startAngle=0;
+    areas.forEach(function(a,i){
+      var pctA=a.h/totalH;
+      var angle=pctA*360;
+      var endAngle=startAngle+angle;
+      var r=55;var cx=60;var cy=60;
+      var x1=cx+r*Math.cos((startAngle-90)*Math.PI/180);
+      var y1=cy+r*Math.sin((startAngle-90)*Math.PI/180);
+      var x2=cx+r*Math.cos((endAngle-90)*Math.PI/180);
+      var y2=cy+r*Math.sin((endAngle-90)*Math.PI/180);
+      var largeArc=angle>180?1:0;
+      if(pctA>=0.999){
+        html+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+(areaColors[i%areaColors.length])+'"/>';
+      } else if(pctA>0.001){
+        html+='<path d="M '+cx+' '+cy+' L '+x1+' '+y1+' A '+r+' '+r+' 0 '+largeArc+' 1 '+x2+' '+y2+' Z" fill="'+(areaColors[i%areaColors.length])+'"/>';
+      }
+      startAngle=endAngle;
+    });
+    html+='</svg>';
+    // Legend
+    html+='<div class="pie-legend">';
+    areas.forEach(function(a,i){
+      var pctA=Math.round(a.h/totalH*100);
+      html+='<div class="pie-legend-item"><div class="pie-legend-dot" style="background:'+(areaColors[i%areaColors.length])+'"></div><span style="flex:1;font-weight:600">'+a.name+'</span><span style="color:#8e8e93">'+fmtH(a.h)+' ('+pctA+'%)</span></div>';
+    });
+    html+='</div></div></div>';
+
+    // Area details with tasks
+    html+='<div class="section"><div class="section-title">Dettaglio per area</div>';
+    areas.forEach(function(a,i){
+      var pctA=Math.round(a.h/totalH*100);
+      html+='<div class="area-card">';
+      html+='<div class="area-header"><div class="area-name"><div class="area-dot" style="background:'+(areaColors[i%areaColors.length])+'"></div>'+a.name+'</div><div class="area-hours">'+fmtH(a.h)+'</div></div>';
+      html+='<div class="area-bar"><div class="area-bar-fill" style="width:'+pctA+'%;background:'+(areaColors[i%areaColors.length])+'"></div></div>';
+      if(a.tasks.length>0){
+        html+='<div class="task-list">';
+        a.tasks.sort().forEach(function(t){
+          html+='<div class="task-item"><div class="task-bullet"></div>'+t+'</div>';
+        });
+        html+='</div>';
+      }
+      html+='</div>';
+    });
+    html+='</div>';
+
+    // Notes
+    if(notes&&notes.trim()){
+      html+='<div class="section"><div class="section-title">Note</div>';
+      html+='<div class="notes-box">'+notes.replace(/</g,"&lt;").replace(/>/g,"&gt;")+'</div></div>';
+    }
+
+    // Footer
+    html+='<div class="footer">Willab · Report generato automaticamente</div>';
+    html+='</body></html>';
+
+    // Open in new tab (web link)
+    var w=window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+
+    // Also trigger PDF download
+    setTimeout(function(){
+      var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement("a");
+      a.href=url;
+      a.download="Report-"+clientName.replace(/\s+/g,"-")+"-"+pLabel.replace(/\s+/g,"-")+".html";
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },500);
+  };
+
   // ═══ UPLOAD ═══
   if(view==="upload"){
     return (
@@ -1159,6 +1317,12 @@ export default function App(){
                     })}
                   </div>);
                 })()}
+                {/* Client Report */}
+                {!c.isI&&(<div style={{marginTop:14,padding:14,background:C.sf,borderRadius:10,border:"1px solid "+C.bdL}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:8}}>Report cliente</div>
+                  <textarea value={crNotes[c.name]||""} onChange={function(e){setCrNote(c.name,e.target.value);}} placeholder="Note per il cliente (risultati, prossimi step...)" rows={3} style={{...ix,width:"100%",fontSize:12,resize:"vertical",marginBottom:8,lineHeight:1.5}}/>
+                  <button onClick={function(){generateClientReport(c.name,crNotes[c.name]||"");}} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><FileText size={14}/> Genera report</button>
+                </div>)}
               </div>)}
             </div>);
           })}</div>
