@@ -847,8 +847,9 @@ export default function App(){
     var peopleList=Object.keys(pSet);
 
     // Period label
-    var dates=cRecs.map(function(r){return r.date;}).sort();
-    var periodStr=dates.length>0?dates[0].split("T")[0]+" — "+dates[dates.length-1].split("T")[0]:"";
+    var dates=cRecs.map(function(r){return r.date;}).filter(Boolean).sort(function(a,b){return a-b;});
+    var fmtDate=function(d){return d.toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});};
+    var periodStr=dates.length>0?fmtDate(dates[0])+" — "+fmtDate(dates[dates.length-1]):"";
 
     // Colors for areas
     var areaColors=["#7C5CFC","#AF52DE","#FF9500","#34C759","#007AFF","#FF3B30","#5856D6","#FF2D55","#00C7BE","#FF6482"];
