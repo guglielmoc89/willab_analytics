@@ -1355,94 +1355,76 @@ export default function App(){
 
             {/* 2. COSTI TEAM */}
             <Accordion icon={Users} title={"Costi team — "+getML(cm)} badge={people.length+" persone"} open={cfgOpen.costs} onToggle={function(){toggleCfg("costs");}}>
-              <p style={{color:C.tm,fontSize:12,marginBottom:12}}>Costo lordo mensile. Si eredita dal mese precedente. Clicca ✕ per azzerare un mese.</p>
-              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}>
-                <thead><tr>
-                  <th style={{textAlign:"left",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11}}>Persona</th>
-                  <th style={{textAlign:"center",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:50}}>Ore</th>
-                  <th style={{textAlign:"center",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:55}}>Tipo</th>
-                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:110}}>Costo €</th>
-                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:55}}>€/h</th>
-                </tr></thead>
-                <tbody>{people.map(function(p){
-                  var h=allRec.filter(function(r){return r.user===p&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
-                  var directVal=cfgCosts[p];
-                  var hasDirect=directVal!==undefined&&directVal!==null;
-                  var inherited=gc(p,cm);
-                  var isInherited=!hasDirect&&inherited>0;
-                  var effectiveCost=hasDirect?directVal:inherited;
-                  var rate=h>0&&!isOverhead(p)?effectiveCost/h:0;
-                  var overhead=isOverhead(p);
-                  return (<tr key={p} style={{opacity:h>0?1:0.35}}>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,fontWeight:600}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{width:22,height:22,borderRadius:99,background:overhead?"rgba(142,142,147,0.1)":C.acL,color:overhead?C.sl:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0}}>{p.charAt(0)}</span>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}</span>
-                        {isInherited&&<span style={{fontSize:8,color:C.ac,flexShrink:0}}>↑</span>}
+              <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Costo lordo mensile. Si eredita dal mese precedente. ✕ per azzerare.</p>
+              {people.map(function(p){
+                var h=allRec.filter(function(r){return r.user===p&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
+                var directVal=cfgCosts[p];
+                var hasDirect=directVal!==undefined&&directVal!==null;
+                var inherited=gc(p,cm);
+                var isInherited=!hasDirect&&inherited>0;
+                var effectiveCost=hasDirect?directVal:inherited;
+                var rate=h>0&&!isOverhead(p)?effectiveCost/h:0;
+                var overhead=isOverhead(p);
+                return (<div key={p} style={{background:C.sf,border:"1px solid "+C.bdL,borderRadius:12,padding:16,marginBottom:10,opacity:h>0?1:0.5}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:28,height:28,borderRadius:99,background:overhead?"rgba(142,142,147,0.12)":C.acL,color:overhead?C.sl:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>{p.charAt(0).toUpperCase()}</span>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:700}}>{p}{isInherited&&<span style={{fontSize:10,color:C.ac,marginLeft:5}}>↑ ereditato</span>}</div>
+                        <div style={{fontSize:12,color:C.tm,marginTop:1}}>{h>0?fmtH(h):"Nessuna ora questo mese"}</div>
                       </div>
-                    </td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"center",color:C.tm,fontSize:12}}>{h>0?fmtH(h):"—"}</td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"center"}}>
-                      <button onClick={function(){setOverhead(p,!overhead);}} style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,border:"1px solid "+(overhead?C.am:C.bd),background:overhead?C.amBg:"transparent",color:overhead?C.am:C.td,cursor:"pointer",fontFamily:"inherit"}}>{overhead?"Fisso":"Var."}</button>
-                    </td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL}}>
-                      <div style={{display:"flex",alignItems:"center",gap:3}}>
-                        <div style={{position:"relative",flex:1}}>
-                          <input type="number" min="0" step="100" value={hasDirect?(directVal||""):""} onChange={function(e){sc(p,cm,parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:18,textAlign:"right",fontSize:12,color:isInherited?C.ac:C.tx}} placeholder={isInherited?Math.round(inherited):"0"}/>
-                          <span style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
-                        </div>
-                        {isInherited&&<button onClick={function(){sc(p,cm,0);}} title={"Azzera costo per "+getML(cm)} style={{background:"transparent",border:"1px solid "+C.rd+"44",borderRadius:5,padding:"2px 5px",color:C.rd,fontSize:10,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
-                      </div>
-                    </td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"right",color:overhead?C.am:rate>0?C.ac:C.td,fontWeight:600,fontSize:12}}>{overhead?"fisso":rate>0?fmt(rate)+"/h":"—"}</td>
-                  </tr>);
-                })}</tbody>
-              </table>
+                    </div>
+                    {rate>0&&!overhead&&<div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:800,color:C.ac}}>{fmt(rate)}</div><div style={{fontSize:10,color:C.tm}}>€/ora</div></div>}
+                    {overhead&&<div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:700,color:C.am}}>Fisso</div><div style={{fontSize:10,color:C.tm}}>no costo clienti</div></div>}
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <button onClick={function(){setOverhead(p,!overhead);}} style={{padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:700,border:"2px solid "+(overhead?C.am:C.bd),background:overhead?C.amBg:"transparent",color:overhead?C.am:C.tm,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{overhead?"Fisso":"Variabile"}</button>
+                    <div style={{position:"relative",flex:1}}>
+                      <input type="number" min="0" step="100" value={hasDirect?(directVal||""):""} onChange={function(e){sc(p,cm,parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:24,paddingLeft:14,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder={isInherited?Math.round(inherited):"0"}/>
+                      <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:12,fontWeight:600}}>€</span>
+                    </div>
+                    {isInherited&&<button onClick={function(){sc(p,cm,0);}} title={"Azzera costo per "+getML(cm)} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
+                  </div>
+                </div>);
+              })}
             </Accordion>
 
             {/* 3. FEE CLIENTI */}
             <Accordion icon={Tag} title={"Fee clienti — "+getML(cm)} badge={extClients.length+" clienti"} open={cfgOpen.fees} onToggle={function(){toggleCfg("fees");}}>
-              <p style={{color:C.tm,fontSize:12,marginBottom:12}}>Mensile si eredita. One-shot si distribuisce sulle ore. Si sommano. ✕ = azzera per questo mese.</p>
-              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}>
-                <thead><tr>
-                  <th style={{textAlign:"left",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11}}>Cliente</th>
-                  <th style={{textAlign:"center",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.tm,fontWeight:600,fontSize:11,width:45}}>Ore</th>
-                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.ac,fontWeight:600,fontSize:11,width:115}}>Mensile</th>
-                  <th style={{textAlign:"right",padding:"8px 6px",borderBottom:"2px solid "+C.bd,color:C.am,fontWeight:600,fontSize:11,width:100}}>One-shot</th>
-                </tr></thead>
-                <tbody>{extClients.map(function(c,ci){
-                  var raw=cfgFees[c];var norm=gfNorm(raw);
-                  var inheritedVal=gfMonthly(c,cm);
-                  var hasDirectM=norm.monthly>0;
-                  var isInheritedM=!hasDirectM&&inheritedVal>0;
-                  var h=allRec.filter(function(r){return r.client===c&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
-                  return (<tr key={c} style={{opacity:h>0?1:0.35}}>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,fontWeight:600,textTransform:"capitalize"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{width:8,height:8,borderRadius:99,background:gcc(ci),flexShrink:0}}/>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c}</span>
-                        {isInheritedM&&<span style={{fontSize:8,color:C.ac,flexShrink:0}}>↑</span>}
-                      </div>
-                    </td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL,textAlign:"center",color:C.tm,fontSize:12}}>{h>0?fmtH(h):"—"}</td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL}}>
-                      <div style={{display:"flex",alignItems:"center",gap:3}}>
+              <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Mensile si eredita. One-shot si distribuisce sulle ore. Si sommano.</p>
+              {extClients.map(function(c,ci){
+                var raw=cfgFees[c];var norm=gfNorm(raw);
+                var inheritedVal=gfMonthly(c,cm);
+                var hasDirectM=norm.monthly>0;
+                var isInheritedM=!hasDirectM&&inheritedVal>0;
+                var h=allRec.filter(function(r){return r.client===c&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
+                return (<div key={c} style={{background:C.sf,border:"1px solid "+C.bdL,borderRadius:12,padding:16,marginBottom:10,opacity:h>0?1:0.5}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                    <span style={{width:10,height:10,borderRadius:99,background:gcc(ci),flexShrink:0}}/>
+                    <span style={{flex:1,fontSize:14,fontWeight:700,textTransform:"capitalize"}}>{c}{isInheritedM&&<span style={{fontSize:10,color:C.ac,marginLeft:5}}>↑ ereditata</span>}</span>
+                    <span style={{fontSize:13,color:C.tm,fontWeight:600}}>{h>0?fmtH(h):"—"}</span>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.ac,marginBottom:5,letterSpacing:".04em"}}>MENSILE</div>
+                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
                         <div style={{position:"relative",flex:1}}>
-                          <input type="number" min="0" step="100" value={hasDirectM?norm.monthly:""} onChange={function(e){sf(c,cm,"monthly",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:22,textAlign:"right",fontSize:12}} placeholder={isInheritedM?Math.round(inheritedVal):"0"}/>
-                          <span style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
+                          <input type="number" min="0" step="100" value={hasDirectM?norm.monthly:""} onChange={function(e){sf(c,cm,"monthly",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:28,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder={isInheritedM?Math.round(inheritedVal):"0"}/>
+                          <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11,fontWeight:600}}>€/m</span>
                         </div>
-                        {isInheritedM&&<button onClick={function(){sf(c,cm,"monthly",0);}} title={"Azzera fee mensile per "+getML(cm)} style={{background:"transparent",border:"1px solid "+C.rd+"44",borderRadius:5,padding:"2px 5px",color:C.rd,fontSize:10,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
+                        {isInheritedM&&<button onClick={function(){sf(c,cm,"monthly",0);}} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
                       </div>
-                    </td>
-                    <td style={{padding:"8px 6px",borderBottom:"1px solid "+C.bdL}}>
+                    </div>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.am,marginBottom:5,letterSpacing:".04em"}}>ONE-SHOT</div>
                       <div style={{position:"relative"}}>
-                        <input type="number" min="0" step="100" value={norm.oneshot||""} onChange={function(e){sf(c,cm,"oneshot",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:14,textAlign:"right",fontSize:12}} placeholder="0"/>
-                        <span style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
+                        <input type="number" min="0" step="100" value={norm.oneshot||""} onChange={function(e){sf(c,cm,"oneshot",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:20,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder="0"/>
+                        <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11,fontWeight:600}}>€</span>
                       </div>
-                    </td>
-                  </tr>);
-                })}</tbody>
-              </table>
+                    </div>
+                  </div>
+                </div>);
+              })}
             </Accordion>
 
             {/* 4. COSTI EXTRA */}
