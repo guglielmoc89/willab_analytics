@@ -959,28 +959,17 @@ export default function App(){
     // Notes
     if(notes&&notes.trim()){
       html+='<div class="section"><div class="section-title">Note</div>';
-      html+='<div class="notes-box">'+notes.replace(/</g,"&lt;").replace(/>/g,"&gt;")+'</div></div>';
+      html+='<div class="notes-box">'+notes.replace(/[<]/g,"&lt;").replace(/[>]/g,"&gt;").replace(/\n/g,"<br/>")+'</div></div>';
     }
 
     // Footer
     html+='<div class="footer">Willab · Report generato automaticamente</div>';
     html+='</body></html>';
 
-    // Open in new tab (web link)
-    var w=window.open("","_blank");
-    w.document.write(html);
-    w.document.close();
-
-    // Also trigger PDF download
-    setTimeout(function(){
-      var blob=new Blob([html],{type:"text/html;charset=utf-8"});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement("a");
-      a.href=url;
-      a.download="Report-"+clientName.replace(/\s+/g,"-")+"-"+pLabel.replace(/\s+/g,"-")+".html";
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    },500);
+    // Open as blob URL (avoids popup blocker)
+    var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+    var url=URL.createObjectURL(blob);
+    window.open(url,"_blank");
   };
 
   // ═══ UPLOAD ═══
@@ -1318,10 +1307,10 @@ export default function App(){
                   </div>);
                 })()}
                 {/* Client Report */}
-                {!c.isI&&(<div style={{marginTop:14,padding:14,background:C.sf,borderRadius:10,border:"1px solid "+C.bdL}}>
+                {!c.isI&&(<div style={{marginTop:14,padding:14,background:C.sf,borderRadius:10,border:"1px solid "+C.bdL}} onClick={function(e){e.stopPropagation();}}>
                   <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:8}}>Report cliente</div>
-                  <textarea value={crNotes[c.name]||""} onChange={function(e){setCrNote(c.name,e.target.value);}} placeholder="Note per il cliente (risultati, prossimi step...)" rows={3} style={{...ix,width:"100%",fontSize:12,resize:"vertical",marginBottom:8,lineHeight:1.5}}/>
-                  <button onClick={function(){generateClientReport(c.name,crNotes[c.name]||"");}} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><FileText size={14}/> Genera report</button>
+                  <textarea value={crNotes[c.name]||""} onChange={function(e){setCrNote(c.name,e.target.value);}} onClick={function(e){e.stopPropagation();}} placeholder="Note per il cliente (risultati, prossimi step...)" rows={3} style={{...ix,width:"100%",fontSize:12,resize:"vertical",marginBottom:8,lineHeight:1.5}}/>
+                  <button onClick={function(e){e.stopPropagation();generateClientReport(c.name,crNotes[c.name]||"");}} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><FileText size={14}/> Genera report</button>
                 </div>)}
               </div>)}
             </div>);
