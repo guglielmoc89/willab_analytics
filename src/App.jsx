@@ -828,9 +828,9 @@ export default function App(){
   };
 
   // ═══ CLIENT REPORT ═══
-  var generateClientReport=function(clientName,notes){
+  var generateClientReport=function(clientName,notesText){
     var cRecs=records.filter(function(r){return r.client===clientName;});
-    if(!cRecs.length){alert("Nessun dato per questo cliente nel periodo.");return;}
+    if(!cRecs.length){alert("Nessun dato per "+clientName+" nel periodo selezionato.");return;}
     
     // Aggregate by area
     var byArea={};
@@ -957,19 +957,25 @@ export default function App(){
     html+='</div>';
 
     // Notes
-    if(notes&&notes.trim()){
+    if(notesText&&notesText.trim()){
       html+='<div class="section"><div class="section-title">Note</div>';
-      html+='<div class="notes-box">'+notes.replace(/[<]/g,"&lt;").replace(/[>]/g,"&gt;").replace(/\n/g,"<br/>")+'</div></div>';
+      html+='<div class="notes-box">'+notesText.replace(/[<]/g,"&lt;").replace(/[>]/g,"&gt;").replace(/\n/g,"<br/>")+'</div></div>';
     }
 
     // Footer
     html+='<div class="footer">Willab · Report generato automaticamente</div>';
     html+='</body></html>';
 
-    // Open as blob URL (avoids popup blocker)
+    // Download HTML file
     var blob=new Blob([html],{type:"text/html;charset=utf-8"});
     var url=URL.createObjectURL(blob);
-    window.open(url,"_blank");
+    var a=document.createElement("a");
+    a.href=url;
+    a.download="Report-"+clientName.replace(/\s+/g,"-")+".html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
   };
 
   // ═══ UPLOAD ═══
