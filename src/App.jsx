@@ -556,7 +556,7 @@ export default function App(){
       exs.forEach(function(ex){mCost+=(ex.amount||0);});
       // Fee/revenue
       var mRev=0;
-      extClients.forEach(function(cn){
+      allClients.forEach(function(cn){
         mRev+=gfMonthly(cn,mk);
         // oneshot: only if explicitly set this month
         var os=gfOneshot(cn,mk);
@@ -580,7 +580,7 @@ export default function App(){
     }
     grouped.forEach(function(g){g.margin=g.rev-g.cost;g.mp=g.rev>0?((g.rev-g.cost)/g.rev)*100:0;});
     return grouped;
-  },[allRec,allMonths,chartG,cfg,people,extClients]);
+  },[allRec,allMonths,chartG,cfg,people,allClients]);
 
   // ── Report generation ──
   var generateReport=function(){
@@ -699,7 +699,7 @@ export default function App(){
         var mRev=0;var mCost=0;
         people.forEach(function(p){mCost+=gc(p,mk);});
         var exs=getExtras(mk);exs.forEach(function(ex){mCost+=(ex.amount||0);});
-        extClients.forEach(function(cn){mRev+=gfMonthly(cn,mk);var os=gfOneshot(cn,mk);if(os>0)mRev+=os;});
+        allClients.forEach(function(cn){mRev+=gfMonthly(cn,mk);var os=gfOneshot(cn,mk);if(os>0)mRev+=os;});
         var mM=mRev-mCost;var mMp=mRev>0?((mRev-mCost)/mRev)*100:0;
         var clr=mM>=0?"#059669":"#dc2626";
         html+='<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600">'+getML(mk)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmt(mRev)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmt(mCost)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:'+clr+'">'+fmt(mM)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:'+clr+'">'+pct(mMp)+'</td></tr>';
@@ -919,7 +919,7 @@ export default function App(){
             </div>
 
             {/* Temporal chart: Ricavi vs Costi */}
-            {chartData.length>1&&(
+            {chartData.length>0&&(
               <div style={{...bx,marginBottom:18}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div style={{fontSize:12,fontWeight:700,color:C.tm}}>Andamento ricavi vs costi</div>
@@ -929,6 +929,18 @@ export default function App(){
                     })}
                   </div>
                 </div>
+                {chartData.length===1&&(
+                  <div style={{padding:"16px 0",textAlign:"center",color:C.tm,fontSize:12}}>
+                    <div style={{marginBottom:6,fontWeight:600}}>{chartData[0].label}</div>
+                    <div style={{display:"flex",justifyContent:"center",gap:20}}>
+                      <div><span style={{color:C.gn,fontWeight:700}}>{fmt(chartData[0].rev)}</span><div style={{fontSize:10,color:C.tm}}>Ricavi</div></div>
+                      <div><span style={{color:C.rd,fontWeight:700}}>{fmt(chartData[0].cost)}</span><div style={{fontSize:10,color:C.tm}}>Costi</div></div>
+                      <div><span style={{color:chartData[0].margin>=0?C.gn:C.rd,fontWeight:700}}>{fmt(chartData[0].margin)}</span><div style={{fontSize:10,color:C.tm}}>Margine</div></div>
+                    </div>
+                    <div style={{fontSize:11,color:C.td,marginTop:10}}>Servono più mesi per visualizzare il grafico a barre con questa aggregazione.</div>
+                  </div>
+                )}
+                {chartData.length>1&&(<div>
                 {/* Legend */}
                 <div style={{display:"flex",gap:16,marginBottom:12,fontSize:11}}>
                   <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:C.gn}}/><span style={{color:C.tm}}>Ricavi</span></div>
@@ -966,6 +978,7 @@ export default function App(){
                     </div>
                   </div>);
                 })()}
+                </div>)}
               </div>
             )}
           </div>
@@ -1391,7 +1404,8 @@ export default function App(){
         {/* COSTI EXTRA TAB */}
         {tab==="extras"&&cm&&(
           <div>
-            <div style={{...bx,padding:"14px 20px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+            {/* Month selector - STICKY */}
+            <div style={{...bx,padding:"12px 20px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,position:"sticky",top:56,zIndex:20,boxShadow:"0 4px 12px rgba(0,0,0,0.06)"}}>
               <div style={{display:"flex",alignItems:"center",gap:6}}><Calendar size={14} strokeWidth={2.2} color={C.ac}/><span style={{fontSize:14,fontWeight:700}}>Mese</span></div>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{allMonths.map(function(mk){return (<Pill key={mk} sm on={cm===mk} onClick={function(){setCfgM(mk);}}>{getML(mk)}</Pill>);})}</div>
             </div>
@@ -1446,7 +1460,10 @@ export default function App(){
                   {[["client","Cliente"],["recurring_client","Ricorrente"],["person","Persona"],["general","Generale"]].map(function(t){
                     return (<button key={t[0]} onClick={function(){updateExtra(cm,idx,"type",t[0]);}} style={{padding:"4px 10px",borderRadius:7,fontSize:11,fontWeight:600,border:"1px solid "+(ex.type===t[0]?C.or:C.bd),background:ex.type===t[0]?C.or+"18":"transparent",color:ex.type===t[0]?C.or:C.tm,cursor:"pointer",fontFamily:"inherit"}}>{t[1]}</button>);
                   })}
-                  <button onClick={function(){removeExtra(cm,idx);}} style={{marginLeft:"auto",background:"transparent",border:"1px solid "+C.rd+"44",borderRadius:7,padding:"4px 8px",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3}}><X size={12}/></button>
+                  <div style={{marginLeft:"auto",display:"flex",gap:4}}>
+                    {cfgHasNxt&&<button onClick={function(){copyExtraNext(cm,idx);}} title={"Copia a "+getML(nextMK(cm))} style={{background:C.ac+"12",border:"1px solid "+C.ac+"44",borderRadius:7,padding:"4px 9px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>→</button>}
+                    <button onClick={function(){removeExtra(cm,idx);}} style={{background:"transparent",border:"1px solid "+C.rd+"44",borderRadius:7,padding:"4px 8px",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3}}><X size={12}/></button>
+                  </div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                   {(ex.type==="client"||ex.type==="recurring_client")&&(
@@ -1534,9 +1551,9 @@ export default function App(){
             </Accordion>
 
             {/* 3. FEE CLIENTI */}
-            <Accordion icon={Tag} title={"Fee clienti — "+getML(cm)} badge={extClients.length+" clienti"} open={cfgOpen.fees} onToggle={function(){toggleCfg("fees");}}>
+            <Accordion icon={Tag} title={"Fee clienti — "+getML(cm)} badge={allClients.length+" clienti"} open={cfgOpen.fees} onToggle={function(){toggleCfg("fees");}}>
               <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Mensile si eredita. One-shot si distribuisce sulle ore. Si sommano.</p>
-              {extClients.map(function(c,ci){
+              {allClients.map(function(c,ci){
                 var raw=cfgFees[c];var norm=gfNorm(raw);
                 var inheritedVal=gfMonthly(c,cm);
                 var hasDirectM=norm.monthly>0;
@@ -1545,7 +1562,7 @@ export default function App(){
                 return (<div key={c} style={{background:C.sf,border:"1px solid "+C.bdL,borderRadius:12,padding:16,marginBottom:10,opacity:h>0?1:0.5}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                     <span style={{width:10,height:10,borderRadius:99,background:gcc(ci),flexShrink:0}}/>
-                    <span style={{flex:1,fontSize:14,fontWeight:700,textTransform:"capitalize"}}>{c}{isInheritedM&&<span style={{fontSize:10,color:C.ac,marginLeft:5}}>↑ ereditata</span>}</span>
+                    <span style={{flex:1,fontSize:14,fontWeight:700,textTransform:"capitalize"}}>{c}{isInternal(c)&&<span style={{fontSize:9,color:C.sl,marginLeft:5,fontWeight:600}}>interno</span>}{isInheritedM&&<span style={{fontSize:10,color:C.ac,marginLeft:5}}>↑ ereditata</span>}</span>
                     <span style={{fontSize:13,color:C.tm,fontWeight:600}}>{h>0?fmtH(h):"—"}</span>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
