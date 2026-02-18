@@ -165,6 +165,9 @@ export default function App(){
   var toggleCfg=function(k){setCfgOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
   var _sync=useState("idle"),syncSt=_sync[0],setSyncSt=_sync[1];
   var _search=useState(""),search=_search[0],setSearch=_search[1];
+  var _undo=useState(null),undoData=_undo[0],setUndoData=_undo[1];
+  var _sortAZ=useState(false),sortAZ=_sortAZ[0],setSortAZ=_sortAZ[1];
+  var undoTimer=useRef(null);
   var fr=useRef(null);
 
 
@@ -245,9 +248,28 @@ export default function App(){
     // Migrate legacy format
     if(n[m].fees[c].type!==undefined){var old=n[m].fees[c];n[m].fees[c]={monthly:old.type==="monthly"?old.amount||0:0,oneshot:old.type==="oneshot"?old.amount||0:0};}
     n[m].fees[c][f]=v;return n;});};
+  // Copy single cost to next month
+  var copyCostNext=function(p,m){var nm=nextMK(m);var val=gc(p,m);sc(p,nm,val);};
+  // Copy single fee to next month
+  var copyFeeNext=function(c,m){var nm=nextMK(m);var norm={monthly:gfMonthly(c,m),oneshot:gfOneshot(c,m)};
+    setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n[nm])n[nm]={costs:{},fees:{},extras:[]};n[nm].fees[c]=JSON.parse(JSON.stringify(norm));return n;});};
+  // Copy single extra to next month
+  var copyExtraNext=function(m,idx){var nm=nextMK(m);var exs=getExtras(m);if(!exs[idx])return;
+    setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n[nm])n[nm]={costs:{},fees:{},extras:[]};if(!n[nm].extras)n[nm].extras=[];n[nm].extras.push(JSON.parse(JSON.stringify(exs[idx])));return n;});};
   var addExtra=function(m){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n[m])n[m]={costs:{},fees:{},extras:[]};if(!n[m].extras)n[m].extras=[];n[m].extras.push({desc:"",amount:0,type:"client",client:"",person:""});return n;});};
   var updateExtra=function(m,idx,field,val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(n[m]&&n[m].extras&&n[m].extras[idx])n[m].extras[idx][field]=val;return n;});};
-  var removeExtra=function(m,idx){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(n[m]&&n[m].extras)n[m].extras.splice(idx,1);return n;});};
+  // Remove extra with confirm + undo
+  var removeExtra=function(m,idx){
+    var ex=getExtras(m)[idx];
+    if(!window.confirm("Eliminare questo costo extra"+(ex&&ex.desc?" ("+ex.desc+")":"")+"?"))return;
+    var backup=JSON.parse(JSON.stringify(cfg));
+    setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(n[m]&&n[m].extras)n[m].extras.splice(idx,1);return n;});
+    // Show undo toast
+    clearTimeout(undoTimer.current);
+    setUndoData({label:"Costo extra eliminato",restore:backup});
+    undoTimer.current=setTimeout(function(){setUndoData(null);},5000);
+  };
+  var doUndo=function(){if(undoData&&undoData.restore){setCfg(undoData.restore);setUndoData(null);clearTimeout(undoTimer.current);}};
   var copyNext=function(m){var nm=nextMK(m);setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));var src=n[m]||{costs:{},fees:{},extras:[]};n[nm]={costs:Object.assign({},src.costs),fees:Object.assign({},src.fees),extras:JSON.parse(JSON.stringify(src.extras||[]))};return n;});};
 
   useEffect(function(){if(Object.keys(cfg).length>0){saveCfgLocal(cfg);setSyncSt("saving");sbSave({cfg:cfg},null,function(s){setSyncSt(s);setTimeout(function(){setSyncSt("idle");},2000);});}},[cfg]);
@@ -746,11 +768,14 @@ export default function App(){
           {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[UserCircle,"people","Persone"],[Users,"team","Team"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
         </div>
 
-        {/* SEARCH BAR - shown on clients, people, areas */}
+        {/* SEARCH BAR + SORT - shown on clients, people, areas */}
         {(tab==="clients"||tab==="people"||tab==="areas")&&(
-          <div style={{marginBottom:14,position:"relative"}}>
-            <Search size={15} color={C.td} strokeWidth={2} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
-            <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={"Cerca "+(tab==="clients"?"cliente":tab==="people"?"persona":"area")+"..."} style={{...ix,width:"100%",paddingLeft:36,fontSize:13}}/>
+          <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
+            <div style={{position:"relative",flex:1}}>
+              <Search size={15} color={C.td} strokeWidth={2} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
+              <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={"Cerca "+(tab==="clients"?"cliente":tab==="people"?"persona":"area")+"..."} style={{...ix,width:"100%",paddingLeft:36,fontSize:13}}/>
+            </div>
+            <button onClick={function(){setSortAZ(!sortAZ);}} style={{...ix,padding:"9px 12px",fontSize:12,fontWeight:700,color:sortAZ?C.ac:C.tm,border:"1px solid "+(sortAZ?C.ac:C.bd),background:sortAZ?C.acL:C.sf,cursor:"pointer",whiteSpace:"nowrap",borderRadius:9}}>{sortAZ?"A→Z":"Ore ↓"}</button>
           </div>
         )}
 
@@ -802,11 +827,12 @@ export default function App(){
               </div>
               {/* Top 3 people by revenue */}
               <div style={{...bx}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.tm,marginBottom:12}}>Top persone per ricavo</div>
-                {PL.filter(function(p){return p.revenue>0;}).sort(function(a,b){return b.revenue-a.revenue;}).slice(0,3).map(function(p,i){
+                <div style={{fontSize:12,fontWeight:700,color:C.tm,marginBottom:12}}>Top persone per margine</div>
+                {PL.filter(function(p){return p.margin!==undefined;}).sort(function(a,b){return (b.margin||0)-(a.margin||0);}).slice(0,3).map(function(p,i){
+                  var m=p.margin||0;
                   return (<div key={p.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<2?"1px solid "+C.bdL:"none"}}>
                     <span style={{fontSize:13,fontWeight:600}}>{p.name}</span>
-                    <span style={{fontSize:13,fontWeight:700,color:C.gn}}>{fmt(p.revenue)}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:m>=0?C.gn:C.rd}}>{fmt(m)}</span>
                   </div>);
                 })}
               </div>
@@ -830,7 +856,7 @@ export default function App(){
 
         {/* AREE */}
         {tab==="areas"&&(
-          <div>{AL.filter(function(a){return !search||a.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).map(function(a){
+          <div>{AL.filter(function(a){return !search||a.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(a){
             return (<div key={a.name} style={{...bx,marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:10,height:10,borderRadius:3,background:gac(a.name)}}/><span style={{fontSize:14,fontWeight:700}}>{a.name}</span></div>
@@ -844,7 +870,7 @@ export default function App(){
 
         {/* CLIENTS */}
         {tab==="clients"&&(
-          <div>{CL.filter(function(c){return !search||c.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).map(function(c,ci){
+          <div>{CL.filter(function(c){return !search||c.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(c,ci){
             var clr=c.isI?C.sl:gcc(ci);
             var fee=c.fee||0;
             var margin=fee>0?fee-c.totalCost:0;
@@ -1061,7 +1087,7 @@ export default function App(){
 
         {/* PEOPLE */}
         {tab==="people"&&(
-          <div>{PL.filter(function(p){return !search||p.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).map(function(p){
+          <div>{PL.filter(function(p){return !search||p.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(p){
             return (<div key={p.name} style={{...bx,marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -1332,11 +1358,11 @@ export default function App(){
         {/* CONFIG */}
         {tab==="config"&&cm&&(
           <div>
-            {/* Month selector */}
-            <div style={{...bx,padding:"14px 20px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+            {/* Month selector - STICKY */}
+            <div style={{...bx,padding:"12px 20px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,position:"sticky",top:56,zIndex:20,boxShadow:"0 4px 12px rgba(0,0,0,0.06)"}}>
               <div style={{display:"flex",alignItems:"center",gap:6}}><Calendar size={14} strokeWidth={2.2} color={C.ac}/><span style={{fontSize:14,fontWeight:700}}>Mese</span></div>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{allMonths.map(function(mk){return (<Pill key={mk} sm on={cm===mk} onClick={function(){setCfgM(mk);}}>{getML(mk)}</Pill>);})}</div>
-              {cfgHasNxt&&<button onClick={function(){copyNext(cm);}} style={{background:C.acL,border:"1px solid "+C.ac+"44",borderRadius:9,padding:"6px 14px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{"Copia tutto a "+getML(nextMK(cm))+" →"}</button>}
+              {cfgHasNxt&&<button onClick={function(){copyNext(cm);}} style={{background:C.acL,border:"1px solid "+C.ac+"44",borderRadius:9,padding:"5px 12px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{"Copia tutto →"}</button>}
             </div>
 
             {/* 1. CLIENTI INTERNI */}
@@ -1384,6 +1410,7 @@ export default function App(){
                       <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:12,fontWeight:600}}>€</span>
                     </div>
                     {isInherited&&<button onClick={function(){sc(p,cm,0);}} title={"Azzera costo per "+getML(cm)} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
+                    {cfgHasNxt&&effectiveCost>0&&<button onClick={function(){copyCostNext(p,cm);}} title={"Copia a "+getML(nextMK(cm))} style={{background:C.ac+"12",border:"1px solid "+C.ac+"44",borderRadius:8,padding:"8px 10px",color:C.ac,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>→</button>}
                   </div>
                 </div>);
               })}
@@ -1423,6 +1450,7 @@ export default function App(){
                       </div>
                     </div>
                   </div>
+                  {cfgHasNxt&&(hasDirectM||isInheritedM||norm.oneshot>0)&&<div style={{marginTop:8,textAlign:"right"}}><button onClick={function(){copyFeeNext(c,cm);}} title={"Copia fee a "+getML(nextMK(cm))} style={{background:C.ac+"12",border:"1px solid "+C.ac+"44",borderRadius:7,padding:"5px 10px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>→ {getML(nextMK(cm))}</button></div>}
                 </div>);
               })}
             </Accordion>
@@ -1460,6 +1488,7 @@ export default function App(){
                       <input type="number" min="0" step="50" value={ex.amount||""} onChange={function(e){updateExtra(cm,idx,"amount",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:18,textAlign:"right",fontSize:12}} placeholder="0"/>
                       <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:9}}>€</span>
                     </div>
+                    {cfgHasNxt&&<button onClick={function(){copyExtraNext(cm,idx);}} title={"Copia a "+getML(nextMK(cm))} style={{background:C.ac+"12",border:"1px solid "+C.ac+"44",borderRadius:6,padding:"4px 8px",color:C.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>→</button>}
                   </div>
                 </div>);
               })}
@@ -1477,6 +1506,14 @@ export default function App(){
         )}
 
         <div style={{textAlign:"center",padding:"30px 0 14px",color:C.td,fontSize:10}}>Willab Analytics</div>
+
+        {/* UNDO TOAST */}
+        {undoData&&(
+          <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1C1B1F",color:"#fff",borderRadius:12,padding:"12px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 24px rgba(0,0,0,0.3)",zIndex:999,fontSize:13,fontWeight:600}}>
+            <span>{undoData.label}</span>
+            <button onClick={doUndo} style={{background:"#7C5CFC",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Annulla</button>
+          </div>
+        )}
       </div>
     </div>
   );
