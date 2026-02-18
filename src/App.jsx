@@ -353,13 +353,43 @@ export default function App(){
   },[]);
 
   var rateMap=useMemo(function(){
-    var hm={};allRec.forEach(function(r){var k=r.user+"|||"+getMK(r.date);hm[k]=(hm[k]||0)+r.hours;});
-    var rm={};Object.keys(hm).forEach(function(k){var p=k.split("|||");
-      if(isOverhead(p[0])){rm[k]=0;} // Overhead people: €0/h on clients
-      else{var mc=gc(p[0],p[1]);rm[k]=hm[k]>0?mc/hm[k]:0;}
+    // For each person: sum ALL configured costs across all months, divide by total hours = global €/h
+    // Then each month's cost = global €/h × hours that month
+    var personTotalCost={};
+    var personTotalHours={};
+    var personMonthHours={};
+
+    // Collect hours per person per month
+    allRec.forEach(function(r){
+      var p=r.user;var mk=getMK(r.date);
+      var k=p+"|||"+mk;
+      personMonthHours[k]=(personMonthHours[k]||0)+r.hours;
+      personTotalHours[p]=(personTotalHours[p]||0)+r.hours;
+    });
+
+    // Sum all configured costs (non-zero) across all months for each person
+    people.forEach(function(p){
+      var total=0;
+      allMonths.forEach(function(mk){
+        var c=gc(p,mk);
+        if(c>0)total+=c;
+      });
+      personTotalCost[p]=total;
+    });
+
+    // Build rateMap: global €/h per person, applied to each month
+    var rm={};
+    Object.keys(personMonthHours).forEach(function(k){
+      var parts=k.split("|||");
+      var p=parts[0];
+      if(isOverhead(p)){rm[k]=0;} // Overhead: €0/h on clients
+      else{
+        var globalRate=personTotalHours[p]>0?(personTotalCost[p]||0)/personTotalHours[p]:0;
+        rm[k]=globalRate;
+      }
     });
     return rm;
-  },[allRec,cfg]);
+  },[allRec,cfg,people,allMonths]);
   var rr=function(r){return rateMap[r.user+"|||"+getMK(r.date)]||0;};
 
   var monthsInPeriod=useMemo(function(){
@@ -579,9 +609,14 @@ export default function App(){
     // Build monthly buckets
     var buckets={};
     allMonths.forEach(function(mk){
-      // Costs for this month
+      // Costs for this month: use distributed rate × hours
       var mCost=0;
-      people.forEach(function(p){mCost+=gc(p,mk);});
+      people.forEach(function(p){
+        var k=p+"|||"+mk;
+        var rate=rateMap[k]||0;
+        var hours=allRec.filter(function(r){return r.user===p&&getMK(r.date)===mk;}).reduce(function(s,r){return s+r.hours;},0);
+        mCost+=rate*hours;
+      });
       // Extras
       var exs=getExtras(mk);
       exs.forEach(function(ex){mCost+=(ex.amount||0);});
@@ -728,7 +763,12 @@ export default function App(){
       html+='<table><thead><tr><th>Mese</th><th style="text-align:right">Ricavi</th><th style="text-align:right">Costi</th><th style="text-align:right">Margine</th><th style="text-align:right">%</th></tr></thead><tbody>';
       allMonths.forEach(function(mk){
         var mRev=0;var mCost=0;
-        people.forEach(function(p){mCost+=gc(p,mk);});
+        people.forEach(function(p){
+          var k=p+"|||"+mk;
+          var rate=rateMap[k]||0;
+          var hours=allRec.filter(function(r){return r.user===p&&getMK(r.date)===mk;}).reduce(function(s,r){return s+r.hours;},0);
+          mCost+=rate*hours;
+        });
         var exs=getExtras(mk);exs.forEach(function(ex){mCost+=(ex.amount||0);});
         allClients.forEach(function(cn){mRev+=gfMonthly(cn,mk);var os=gfOneshot(cn,mk);if(os>0)mRev+=os;});
         var mM=mRev-mCost;var mMp=mRev>0?((mRev-mCost)/mRev)*100:0;
