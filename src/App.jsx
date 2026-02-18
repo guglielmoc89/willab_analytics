@@ -352,9 +352,8 @@ export default function App(){
     });
   },[]);
 
-  var rateMap=useMemo(function(){
+  var rateCalc=useMemo(function(){
     // For each person: sum ALL configured costs across all months, divide by total hours = global €/h
-    // Then each month's cost = global €/h × hours that month
     var personTotalCost={};
     var personTotalHours={};
     var personMonthHours={};
@@ -382,14 +381,17 @@ export default function App(){
     Object.keys(personMonthHours).forEach(function(k){
       var parts=k.split("|||");
       var p=parts[0];
-      if(isOverhead(p)){rm[k]=0;} // Overhead: €0/h on clients
+      if(isOverhead(p)){rm[k]=0;}
       else{
         var globalRate=personTotalHours[p]>0?(personTotalCost[p]||0)/personTotalHours[p]:0;
         rm[k]=globalRate;
       }
     });
-    return rm;
+    return {rm:rm,ptc:personTotalCost,pth:personTotalHours,pmh:personMonthHours};
   },[allRec,cfg,people,allMonths]);
+  var rateMap=rateCalc.rm;
+  var personTotalCost=rateCalc.ptc;
+  var personTotalHours=rateCalc.pth;
   var rr=function(r){return rateMap[r.user+"|||"+getMK(r.date)]||0;};
 
   var monthsInPeriod=useMemo(function(){
@@ -536,7 +538,8 @@ export default function App(){
       if(isOverhead(n)){monthsInPeriod.forEach(function(mk){fixCost+=gc(n,mk);});}
       var totalPersonCost=varCost+fixCost+extraP;
       var effectiveRate=byP[n].h>0?totalPersonCost/byP[n].h:0;
-      return {name:n,hours:byP[n].h,cost:varCost,fixedCost:fixCost,extraCost:extraP,totalCost:totalPersonCost,rate:effectiveRate,isOverhead:isOverhead(n),areas:Object.keys(byP[n].aa)};
+      var gRate=personTotalHours[n]>0?(personTotalCost[n]||0)/personTotalHours[n]:0;
+      return {name:n,hours:byP[n].h,cost:varCost,fixedCost:fixCost,extraCost:extraP,totalCost:totalPersonCost,rate:effectiveRate,globalRate:gRate,isOverhead:isOverhead(n),areas:Object.keys(byP[n].aa)};
     }).sort(function(a,b){return b.hours-a.hours;});
     var SL=Object.keys(bySp).map(function(n){return {name:n,hours:bySp[n].h,cost:bySp[n].c};}).sort(function(a,b){return b.hours-a.hours;});
     var tH=records.reduce(function(s,r){return s+r.hours;},0);
@@ -1341,7 +1344,7 @@ export default function App(){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{width:36,height:36,borderRadius:10,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700}}>{p.name.charAt(0)}</span>
-                  <div><div style={{fontSize:14,fontWeight:700}}>{p.name}</div><span style={{fontSize:12,color:C.tm}}>{fmt(p.rate)+"/h · "+p.areas.length+" aree"}</span></div>
+                  <div><div style={{fontSize:14,fontWeight:700}}>{p.name}</div><span style={{fontSize:12,color:C.tm}}>{fmt(p.globalRate)+"/h"+(p.rate!==p.globalRate?" · periodo "+fmt(p.rate)+"/h":"")+" · "+p.areas.length+" aree"}</span></div>
                 </div>
                 <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800}}>{fmtH(p.hours)}</div><div style={{fontSize:12,color:C.tm}}>{fmt(p.cost)}</div></div>
               </div>
@@ -1398,7 +1401,7 @@ export default function App(){
                   <span style={{width:42,height:42,borderRadius:99,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700}}>{p.name.charAt(0)}</span>
                   <div>
                     <div style={{fontSize:16,fontWeight:800}}>{p.name}</div>
-                    <span style={{fontSize:12,color:C.tm}}>{fmtH(p.hours)+" · "+entries+" entries · "+uniqueTasks+" task · "+fmt(p.rate)+"/h"}</span>
+                    <span style={{fontSize:12,color:C.tm}}>{fmtH(p.hours)+" · "+entries+" entries · "+uniqueTasks+" task · "+fmt(p.globalRate)+"/h"+(p.rate!==p.globalRate?" (periodo "+fmt(p.rate)+"/h)":"")}</span>
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
