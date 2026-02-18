@@ -170,6 +170,8 @@ export default function App(){
   var _chartG=useState("month"),chartG=_chartG[0],setChartG=_chartG[1];
   var _clOpen=useState({}),clOpen=_clOpen[0],setClOpen=_clOpen[1];
   var toggleCl=function(name){setClOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
+  var _plOpen=useState({}),plOpen=_plOpen[0],setPlOpen=_plOpen[1];
+  var togglePl=function(name){setPlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -352,52 +354,59 @@ export default function App(){
     });
   },[]);
 
-  var rateCalc=useMemo(function(){
-    // For each person: sum ALL configured costs across all months, divide by total hours = global €/h
-    var personTotalCost={};
-    var personTotalHours={};
+  var rateCalcGlobal=useMemo(function(){
+    // Global: hours per person per month (for chartData / report monthly breakdowns)
     var personMonthHours={};
-
-    // Collect hours per person per month
     allRec.forEach(function(r){
-      var p=r.user;var mk=getMK(r.date);
-      var k=p+"|||"+mk;
+      var k=r.user+"|||"+getMK(r.date);
       personMonthHours[k]=(personMonthHours[k]||0)+r.hours;
-      personTotalHours[p]=(personTotalHours[p]||0)+r.hours;
     });
-
-    // Sum all configured costs (non-zero) across all months for each person
-    people.forEach(function(p){
-      var total=0;
-      allMonths.forEach(function(mk){
-        var c=gc(p,mk);
-        if(c>0)total+=c;
-      });
-      personTotalCost[p]=total;
-    });
-
-    // Build rateMap: global €/h per person, applied to each month
-    var rm={};
-    Object.keys(personMonthHours).forEach(function(k){
-      var parts=k.split("|||");
-      var p=parts[0];
-      if(isOverhead(p)){rm[k]=0;}
-      else{
-        var globalRate=personTotalHours[p]>0?(personTotalCost[p]||0)/personTotalHours[p]:0;
-        rm[k]=globalRate;
-      }
-    });
-    return {rm:rm,ptc:personTotalCost,pth:personTotalHours,pmh:personMonthHours};
-  },[allRec,cfg,people,allMonths]);
-  var rateMap=rateCalc.rm;
-  var personTotalCost=rateCalc.ptc;
-  var personTotalHours=rateCalc.pth;
-  var rr=function(r){return rateMap[r.user+"|||"+getMK(r.date)]||0;};
+    return {pmh:personMonthHours};
+  },[allRec]);
 
   var monthsInPeriod=useMemo(function(){
     if(pm==="all")return allMonths;
     var s=new Set();records.forEach(function(r){s.add(getMK(r.date));});return Array.from(s).sort();
   },[pm,records,allMonths]);
+
+  // Rate map: based on period selected
+  var rateCalc=useMemo(function(){
+    var personPeriodCost={};
+    var personPeriodHours={};
+
+    // Hours in period per person
+    records.forEach(function(r){
+      personPeriodHours[r.user]=(personPeriodHours[r.user]||0)+r.hours;
+    });
+
+    // Sum configured costs only for months in period
+    people.forEach(function(p){
+      var total=0;
+      monthsInPeriod.forEach(function(mk){
+        var c=gc(p,mk);
+        if(c>0)total+=c;
+      });
+      personPeriodCost[p]=total;
+    });
+
+    // Build rateMap: period €/h per person
+    var rm={};
+    var pmh=rateCalcGlobal.pmh;
+    Object.keys(pmh).forEach(function(k){
+      var parts=k.split("|||");
+      var p=parts[0];
+      if(isOverhead(p)){rm[k]=0;}
+      else{
+        var periodRate=personPeriodHours[p]>0?(personPeriodCost[p]||0)/personPeriodHours[p]:0;
+        rm[k]=periodRate;
+      }
+    });
+    return {rm:rm,ptc:personPeriodCost,pth:personPeriodHours};
+  },[records,cfg,people,monthsInPeriod,rateCalcGlobal]);
+  var rateMap=rateCalc.rm;
+  var personTotalCost=rateCalc.ptc;
+  var personTotalHours=rateCalc.pth;
+  var rr=function(r){return rateMap[r.user+"|||"+getMK(r.date)]||0;};
 
   var getEF=useCallback(function(cn){
     var total=0;
@@ -538,8 +547,7 @@ export default function App(){
       if(isOverhead(n)){monthsInPeriod.forEach(function(mk){fixCost+=gc(n,mk);});}
       var totalPersonCost=varCost+fixCost+extraP;
       var effectiveRate=byP[n].h>0?totalPersonCost/byP[n].h:0;
-      var gRate=personTotalHours[n]>0?(personTotalCost[n]||0)/personTotalHours[n]:0;
-      return {name:n,hours:byP[n].h,cost:varCost,fixedCost:fixCost,extraCost:extraP,totalCost:totalPersonCost,rate:effectiveRate,globalRate:gRate,isOverhead:isOverhead(n),areas:Object.keys(byP[n].aa)};
+      return {name:n,hours:byP[n].h,cost:varCost,fixedCost:fixCost,extraCost:extraP,totalCost:totalPersonCost,rate:effectiveRate,isOverhead:isOverhead(n),areas:Object.keys(byP[n].aa)};
     }).sort(function(a,b){return b.hours-a.hours;});
     var SL=Object.keys(bySp).map(function(n){return {name:n,hours:bySp[n].h,cost:bySp[n].c};}).sort(function(a,b){return b.hours-a.hours;});
     var tH=records.reduce(function(s,r){return s+r.hours;},0);
@@ -1340,14 +1348,81 @@ export default function App(){
         {/* PEOPLE */}
         {tab==="people"&&(
           <div>{PL.filter(function(p){return !search||p.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(p){
-            return (<div key={p.name} style={{...bx,marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{width:36,height:36,borderRadius:10,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700}}>{p.name.charAt(0)}</span>
-                  <div><div style={{fontSize:14,fontWeight:700}}>{p.name}</div><span style={{fontSize:12,color:C.tm}}>{fmt(p.globalRate)+"/h"+(p.rate!==p.globalRate?" · periodo "+fmt(p.rate)+"/h":"")+" · "+p.areas.length+" aree"}</span></div>
+            var isOpen=plOpen[p.name];
+            var hasMargin=p.revenue>0;
+            var mPos=p.margin>=0;
+            // Breakdown: clients this person worked on
+            var pClients={};records.filter(function(r){return r.user===p.name;}).forEach(function(r){if(r.client)pClients[r.client]=(pClients[r.client]||0)+r.hours;});
+            var clientList=Object.keys(pClients).map(function(c){return {name:c,h:pClients[c]};}).sort(function(a,b){return b.h-a.h;});
+            // Breakdown: areas
+            var pAreas={};records.filter(function(r){return r.user===p.name;}).forEach(function(r){if(r.area)pAreas[r.area]=(pAreas[r.area]||0)+r.hours;});
+            var areaList=Object.keys(pAreas).map(function(a){return {name:a,h:pAreas[a]};}).sort(function(a,b){return b.h-a.h;});
+
+            return (<div key={p.name} style={{...bx,marginBottom:10,overflow:"hidden"}}>
+              {/* Header */}
+              <div onClick={function(){togglePl(p.name);}} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"2px 0"}}>
+                <span style={{width:32,height:32,borderRadius:9,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>{p.name.charAt(0)}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:700}}>{p.name}</div>
+                  <div style={{fontSize:11,color:C.tm}}>{fmt(p.rate)+"/h · "+p.areas.length+" aree"}{p.isOverhead&&" · Fisso"}</div>
                 </div>
-                <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800}}>{fmtH(p.hours)}</div><div style={{fontSize:12,color:C.tm}}>{fmt(p.cost)}</div></div>
+                <div style={{textAlign:"right",marginRight:6}}>
+                  <div style={{fontSize:16,fontWeight:800}}>{fmtH(p.hours)}</div>
+                  {hasMargin&&<div style={{fontSize:11,fontWeight:700,color:mPos?C.gn:C.rd}}>{(mPos?"+":"")+fmt(p.margin)}</div>}
+                  {!hasMargin&&<div style={{fontSize:11,color:C.tm}}>{fmt(p.totalCost)}</div>}
+                </div>
+                <ChevronDown size={14} color={C.tm} style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}/>
               </div>
+
+              {/* Body */}
+              {isOpen&&(<div style={{marginTop:14}}>
+                {/* KPI grid */}
+                <div style={{display:"grid",gridTemplateColumns:hasMargin?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginBottom:12}}>
+                  <div style={{background:C.amBg,borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:C.am,letterSpacing:".04em",marginBottom:3}}>COSTO</div>
+                    <div style={{fontSize:15,fontWeight:800}}>{fmt(p.totalCost)}</div>
+                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{fmt(p.rate)}/h</div>
+                  </div>
+                  {hasMargin&&<div style={{background:C.blBg,borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:C.bl,letterSpacing:".04em",marginBottom:3}}>RICAVO ATTR.</div>
+                    <div style={{fontSize:15,fontWeight:800}}>{fmt(p.revenue)}</div>
+                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{p.hours>0?fmt(p.revenue/p.hours):0}/h</div>
+                  </div>}
+                  <div style={{background:hasMargin?(mPos?C.gnBg:C.rdBg):"rgba(142,142,147,0.06)",borderRadius:9,padding:"9px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:hasMargin?(mPos?C.gn:C.rd):C.td,letterSpacing:".04em",marginBottom:3}}>{hasMargin?"MARGINE":"ORE"}</div>
+                    {hasMargin?(<div style={{fontSize:15,fontWeight:800,color:mPos?C.gn:C.rd}}>{fmt(p.margin)}</div>):(<div style={{fontSize:15,fontWeight:800}}>{fmtH(p.hours)}</div>)}
+                    {hasMargin&&<div style={{fontSize:10,color:mPos?C.gn:C.rd,marginTop:1}}>{(mPos?"+":"")+pct(p.mp)}</div>}
+                  </div>
+                </div>
+
+                {/* Clienti breakdown */}
+                {clientList.length>0&&(<div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:6}}>Clienti</div>
+                  {clientList.slice(0,5).map(function(cl){
+                    return (<div key={cl.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}>
+                      <span style={{textTransform:"capitalize",fontWeight:600}}>{cl.name}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:60,height:4,background:C.bdL,borderRadius:2}}><div style={{height:"100%",borderRadius:2,background:C.ac,width:pct(cl.h/(clientList[0]?clientList[0].h:1)*100),opacity:0.6}}/></div>
+                        <span style={{color:C.tm,minWidth:50,textAlign:"right"}}>{fmtH(cl.h)}</span>
+                      </div>
+                    </div>);
+                  })}
+                </div>)}
+
+                {/* Aree breakdown */}
+                {areaList.length>0&&(<div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:6}}>Aree</div>
+                  {areaList.slice(0,5).map(function(ar){
+                    return (<div key={ar.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}>
+                      <span style={{fontWeight:600}}>{ar.name}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:60,height:4,background:C.bdL,borderRadius:2}}><div style={{height:"100%",borderRadius:2,background:gac(ar.name),width:pct(ar.h/(areaList[0]?areaList[0].h:1)*100),opacity:0.6}}/></div>
+                        <span style={{color:C.tm,minWidth:50,textAlign:"right"}}>{fmtH(ar.h)}</span>
+                      </div>
+                    </div>);
+                  })}
+                </div>)}
+              </div>)}
             </div>);
           })}</div>
         )}
@@ -1401,7 +1476,7 @@ export default function App(){
                   <span style={{width:42,height:42,borderRadius:99,background:C.acL,color:C.ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700}}>{p.name.charAt(0)}</span>
                   <div>
                     <div style={{fontSize:16,fontWeight:800}}>{p.name}</div>
-                    <span style={{fontSize:12,color:C.tm}}>{fmtH(p.hours)+" · "+entries+" entries · "+uniqueTasks+" task · "+fmt(p.globalRate)+"/h"+(p.rate!==p.globalRate?" (periodo "+fmt(p.rate)+"/h)":"")}</span>
+                    <span style={{fontSize:12,color:C.tm}}>{fmtH(p.hours)+" · "+entries+" entries · "+uniqueTasks+" task · "+fmt(p.rate)+"/h"}</span>
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
