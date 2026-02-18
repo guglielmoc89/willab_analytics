@@ -167,6 +167,7 @@ export default function App(){
   var _search=useState(""),search=_search[0],setSearch=_search[1];
   var _undo=useState(null),undoData=_undo[0],setUndoData=_undo[1];
   var _sortAZ=useState(false),sortAZ=_sortAZ[0],setSortAZ=_sortAZ[1];
+  var _chartG=useState("month"),chartG=_chartG[0],setChartG=_chartG[1];
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -541,6 +542,46 @@ export default function App(){
     return {AL:AL,CL:CL,PL:PL,SL:SL,byPA:byPA,byCA:byCA,tH:tH,tC:tC,iH:iH,iC:iC,tF:tF,tM:tF-tC,totalExtras:totalExtras,extrasGeneral:extrasGeneral};
   },[records,rateMap,getEF,cfg,monthsInPeriod]);
 
+  // ── Chart data: group by month/quarter/semester/year ──
+  var chartData=useMemo(function(){
+    if(!allRec.length)return [];
+    // Build monthly buckets
+    var buckets={};
+    allMonths.forEach(function(mk){
+      // Costs for this month
+      var mCost=0;
+      people.forEach(function(p){mCost+=gc(p,mk);});
+      // Extras
+      var exs=getExtras(mk);
+      exs.forEach(function(ex){mCost+=(ex.amount||0);});
+      // Fee/revenue
+      var mRev=0;
+      extClients.forEach(function(cn){
+        mRev+=gfMonthly(cn,mk);
+        // oneshot: only if explicitly set this month
+        var os=gfOneshot(cn,mk);
+        if(os>0)mRev+=os;
+      });
+      buckets[mk]={rev:mRev,cost:mCost,label:getML(mk)};
+    });
+    // Group by chartG
+    var grouped=[];
+    if(chartG==="month"){
+      allMonths.forEach(function(mk){grouped.push(buckets[mk]);});
+    } else {
+      var gSize=chartG==="quarter"?3:chartG==="semester"?6:12;
+      for(var i=0;i<allMonths.length;i+=gSize){
+        var slice=allMonths.slice(i,i+gSize);
+        var gr={rev:0,cost:0,label:""};
+        slice.forEach(function(mk){gr.rev+=buckets[mk].rev;gr.cost+=buckets[mk].cost;});
+        gr.label=slice.length>1?getML(slice[0])+" – "+getML(slice[slice.length-1]):getML(slice[0]);
+        grouped.push(gr);
+      }
+    }
+    grouped.forEach(function(g){g.margin=g.rev-g.cost;g.mp=g.rev>0?((g.rev-g.cost)/g.rev)*100:0;});
+    return grouped;
+  },[allRec,allMonths,chartG,cfg,people,extClients]);
+
   // ── Report generation ──
   var generateReport=function(){
     var extCL=CL.filter(function(c){return !c.isI;});
@@ -640,6 +681,31 @@ export default function App(){
     // Area distribution
     html+='<h2>📊 Distribuzione ore per area</h2>';
     html+='<table><thead><tr><th>Area</th><th style="text-align:right">Ore</th><th style="text-align:right">%</th></tr></thead><tbody>'+areaRows+'</tbody></table>';
+
+    // People table
+    html+='<h2>👥 Team — Dettaglio persone</h2>';
+    html+='<table><thead><tr><th>Persona</th><th style="text-align:right">Ore</th><th style="text-align:right">Costo</th><th style="text-align:right">Ricavo attr.</th><th style="text-align:right">Margine</th><th style="text-align:right">€/h costo</th></tr></thead><tbody>';
+    PL.sort(function(a,b){return b.hours-a.hours;}).forEach(function(p){
+      var mClr=p.margin>=0?"#059669":"#dc2626";
+      html+='<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600">'+p.name+(p.isOverhead?' <span class="badge blue">fisso</span>':'')+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmtH(p.hours)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmt(p.totalCost)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+(p.revenue>0?fmt(p.revenue):"—")+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:'+mClr+'">'+(p.revenue>0?fmt(p.margin):"—")+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmt(p.rate)+'</td></tr>';
+    });
+    html+='</tbody></table>';
+
+    // Monthly breakdown
+    if(allMonths.length>1){
+      html+='<h2>📅 Riepilogo mensile</h2>';
+      html+='<table><thead><tr><th>Mese</th><th style="text-align:right">Ricavi</th><th style="text-align:right">Costi</th><th style="text-align:right">Margine</th><th style="text-align:right">%</th></tr></thead><tbody>';
+      allMonths.forEach(function(mk){
+        var mRev=0;var mCost=0;
+        people.forEach(function(p){mCost+=gc(p,mk);});
+        var exs=getExtras(mk);exs.forEach(function(ex){mCost+=(ex.amount||0);});
+        extClients.forEach(function(cn){mRev+=gfMonthly(cn,mk);var os=gfOneshot(cn,mk);if(os>0)mRev+=os;});
+        var mM=mRev-mCost;var mMp=mRev>0?((mRev-mCost)/mRev)*100:0;
+        var clr=mM>=0?"#059669":"#dc2626";
+        html+='<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600">'+getML(mk)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmt(mRev)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">'+fmt(mCost)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:'+clr+'">'+fmt(mM)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:'+clr+'">'+pct(mMp)+'</td></tr>';
+      });
+      html+='</tbody></table>';
+    }
 
     html+='<div style="margin-top:32px;padding-top:12px;border-top:1px solid #eee;color:#aaa;font-size:10px;text-align:center">Willab Analytics · Report generato automaticamente</div>';
     html+='</body></html>';
@@ -768,12 +834,12 @@ export default function App(){
           {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[UserCircle,"people","Persone"],[Users,"team","Team"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
         </div>
 
-        {/* SEARCH BAR + SORT - shown on clients, people, areas */}
-        {(tab==="clients"||tab==="people"||tab==="areas")&&(
+        {/* SEARCH BAR + SORT - shown on clients, people, areas, team */}
+        {(tab==="clients"||tab==="people"||tab==="areas"||tab==="team")&&(
           <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
             <div style={{position:"relative",flex:1}}>
               <Search size={15} color={C.td} strokeWidth={2} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
-              <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={"Cerca "+(tab==="clients"?"cliente":tab==="people"?"persona":"area")+"..."} style={{...ix,width:"100%",paddingLeft:36,fontSize:13}}/>
+              <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={"Cerca "+(tab==="clients"?"cliente":tab==="people"||tab==="team"?"persona":"area")+"..."} style={{...ix,width:"100%",paddingLeft:36,fontSize:13}}/>
             </div>
             <button onClick={function(){setSortAZ(!sortAZ);}} style={{...ix,padding:"9px 12px",fontSize:12,fontWeight:700,color:sortAZ?C.ac:C.tm,border:"1px solid "+(sortAZ?C.ac:C.bd),background:sortAZ?C.acL:C.sf,cursor:"pointer",whiteSpace:"nowrap",borderRadius:9}}>{sortAZ?"A→Z":"Ore ↓"}</button>
           </div>
@@ -851,6 +917,57 @@ export default function App(){
                 </div>);
               })}
             </div>
+
+            {/* Temporal chart: Ricavi vs Costi */}
+            {chartData.length>1&&(
+              <div style={{...bx,marginBottom:18}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <div style={{fontSize:12,fontWeight:700,color:C.tm}}>Andamento ricavi vs costi</div>
+                  <div style={{display:"flex",gap:3}}>
+                    {[["month","Mese"],["quarter","Trim."],["semester","Sem."],["year","Anno"]].map(function(g){
+                      return (<button key={g[0]} onClick={function(){setChartG(g[0]);}} style={{padding:"4px 10px",borderRadius:7,fontSize:10,fontWeight:700,border:"1px solid "+(chartG===g[0]?C.ac:C.bd),background:chartG===g[0]?C.acL:"transparent",color:chartG===g[0]?C.ac:C.tm,cursor:"pointer",fontFamily:"inherit"}}>{g[1]}</button>);
+                    })}
+                  </div>
+                </div>
+                {/* Legend */}
+                <div style={{display:"flex",gap:16,marginBottom:12,fontSize:11}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:C.gn}}/><span style={{color:C.tm}}>Ricavi</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:C.rd}}/><span style={{color:C.tm}}>Costi</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:C.ac+"44"}}/><span style={{color:C.tm}}>Margine</span></div>
+                </div>
+                {/* Bar chart */}
+                {(function(){
+                  var maxVal=Math.max.apply(null,chartData.map(function(d){return Math.max(d.rev,d.cost);}));
+                  if(maxVal===0)maxVal=1;
+                  var barH=120;
+                  return (<div>
+                    <div style={{display:"flex",gap:4,alignItems:"flex-end",height:barH,marginBottom:6}}>
+                      {chartData.map(function(d,i){
+                        var rH=d.rev/maxVal*barH;
+                        var cH=d.cost/maxVal*barH;
+                        var w=Math.max(12,Math.floor((100/chartData.length/2)-2));
+                        return (<div key={i} style={{flex:1,display:"flex",gap:2,justifyContent:"center",alignItems:"flex-end",height:"100%"}}>
+                          <div style={{width:w+"%",maxWidth:24,height:Math.max(2,rH),background:C.gn,borderRadius:"3px 3px 0 0",transition:"height 0.3s"}} title={"Ricavi: "+fmt(d.rev)}/>
+                          <div style={{width:w+"%",maxWidth:24,height:Math.max(2,cH),background:C.rd,borderRadius:"3px 3px 0 0",transition:"height 0.3s"}} title={"Costi: "+fmt(d.cost)}/>
+                        </div>);
+                      })}
+                    </div>
+                    {/* Labels */}
+                    <div style={{display:"flex",gap:4}}>
+                      {chartData.map(function(d,i){
+                        return (<div key={i} style={{flex:1,textAlign:"center",fontSize:9,color:C.tm,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.label}</div>);
+                      })}
+                    </div>
+                    {/* Margin row */}
+                    <div style={{display:"flex",gap:4,marginTop:6}}>
+                      {chartData.map(function(d,i){
+                        return (<div key={i} style={{flex:1,textAlign:"center",fontSize:10,fontWeight:700,color:d.margin>=0?C.gn:C.rd}}>{d.margin!==0?fmt(d.margin):"—"}</div>);
+                      })}
+                    </div>
+                  </div>);
+                })()}
+              </div>
+            )}
           </div>
         )}
 
@@ -1101,7 +1218,7 @@ export default function App(){
         )}
 
         {tab==="team"&&(
-          <div>{PL.map(function(p){
+          <div>{PL.filter(function(p){return !search||p.name.toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){return sortAZ?a.name.localeCompare(b.name):b.hours-a.hours;}).map(function(p){
             var pRecs=records.filter(function(r){return r.user===p.name;});
             var entries=pRecs.length;
             var avgDur=entries>0?p.hours/entries*60:0;
