@@ -170,89 +170,67 @@ export default function App(){
     var endMs=new Date(ckTo+"T23:59:59").getTime();
     var hdrs={"Authorization":ckToken,"Content-Type":"application/json"};
 
-    // Step 1: Get all team members
-    fetch("https://api.clickup.com/api/v2/team/"+ckTeam,{headers:hdrs})
-    .then(function(res){
-      if(!res.ok)throw new Error("Errore team API: "+res.status);
-      return res.json();
-    })
-    .then(function(teamData){
-      var members=[];
-      if(teamData.team&&teamData.team.members){
-        members=teamData.team.members.map(function(m){return {id:m.user.id,name:m.user.username||m.user.email||""};});
-      }
-      if(members.length===0)throw new Error("Nessun membro trovato nel team");
-
-      setCkError("Trovati "+members.length+" membri. Scaricando entries...");
-
-      // Step 2: Fetch time entries for each member
-      var allEntries=[];
-      var membersDone=0;
-
-      var fetchMemberEntries=function(userId,userName,page){
-        fetch("https://api.clickup.com/api/v2/team/"+ckTeam+"/time_entries?start_date="+startMs+"&end_date="+endMs+"&assignee="+userId+"&page="+page,{headers:hdrs})
-        .then(function(res){
-          if(!res.ok)throw new Error("API error per "+userName+": "+res.status);
-          return res.json();
-        })
-        .then(function(json){
-          var entries=json.data||[];
-          entries.forEach(function(e){e._userName=userName;});
-          allEntries=allEntries.concat(entries);
-          if(entries.length>=100){
-            fetchMemberEntries(userId,userName,page+1);
-          } else {
-            membersDone++;
-            setCkError("Scaricati "+membersDone+"/"+members.length+" membri ("+allEntries.length+" entries)...");
-            if(membersDone>=members.length){
-              finishImport(allEntries);
-            }
-          }
-        })
-        .catch(function(err){
-          membersDone++;
-          if(membersDone>=members.length)finishImport(allEntries);
-        });
-      };
-
-      members.forEach(function(m){
-        fetchMemberEntries(m.id,m.name,0);
+    // Single call - all entries, no member loop
+    var allEntries=[];
+    var fetchPage=function(page){
+      setCkError("Scaricando pagina "+(page+1)+"...");
+      fetch("https://api.clickup.com/api/v2/team/"+ckTeam+"/time_entries?start_date="+startMs+"&end_date="+endMs+"&page="+page,{headers:hdrs})
+      .then(function(res){
+        if(!res.ok)throw new Error("API error: "+res.status);
+        return res.json();
+      })
+      .then(function(json){
+        var entries=json.data||[];
+        allEntries=allEntries.concat(entries);
+        setCkError("Scaricate "+allEntries.length+" entries...");
+        if(entries.length>=100){
+          fetchPage(page+1);
+        } else {
+          finishImport(allEntries);
+        }
+      })
+      .catch(function(err){
+        setCkError("Errore: "+err.message);
+        setCkLoading(false);
       });
-    })
-    .catch(function(err){
-      setCkError("Errore: "+err.message);
-      setCkLoading(false);
-    });
+    };
+    fetchPage(0);
 
     var finishImport=function(allEntries){
-      // Debug: log first 3 entries to console
-      console.log("ClickUp raw entries:",allEntries.slice(0,3));
+      // Debug
       if(allEntries.length>0){
-        var e0=allEntries[0];
-        var dbg="ENTRY RAW #1:\n";
-        dbg+="user: "+JSON.stringify(e0.user)+"\n";
-        dbg+="task: "+(e0.task?e0.task.name:"null")+" | list: "+JSON.stringify(e0.task&&e0.task.list)+" | space: "+JSON.stringify(e0.task&&e0.task.space)+"\n";
-        dbg+="tags (entry): "+JSON.stringify(e0.tags)+"\n";
-        dbg+="tags (task): "+JSON.stringify(e0.task&&e0.task.tags)+"\n";
-        dbg+="task_tags: "+JSON.stringify(e0.task_tags)+"\n";
-        dbg+="duration: "+e0.duration+" | start: "+e0.start+"\n";
-        dbg+="description: "+(e0.description||"(vuota)")+"\n";
-        dbg+="task_location: "+JSON.stringify(e0.task_location)+"\n";
-        dbg+="Keys: "+Object.keys(e0).join(", ");
-        console.log(dbg);
-        alert(dbg);
+        console.log("RAW ENTRY #1:",JSON.stringify(allEntries[0],null,2));
+        console.log("TOTAL RAW:",allEntries.length);
+        var ids={};var dupes=0;
+        allEntries.forEach(function(e){if(ids[e.id])dupes++;ids[e.id]=1;});
+        console.log("DUPLICATES:",dupes);
       }
 
-      var mapped=allEntries.map(function(e){
-        var user=e._userName||e.user&&e.user.username||"";
-        var taskName=e.task?e.task.name||"":"";
-        var taskTags=(e.task&&e.task.tags)||[];
-        var tags=e.tags||taskTags||[];
-        var tagNames=tags.map(function(t){return (t.name||"").toLowerCase().trim();}).filter(Boolean);
+      // Deduplicate
+      var seen={};
+      var unique=allEntries.filter(function(e){if(seen[e.id])return false;seen[e.id]=true;return true;});
+
+      var mapped=unique.map(function(e){
+        var user=(e.user&&(e.user.username||e.user.email))||"";
+        var taskName=(e.task&&e.task.name)||"";
+        // Tags from entry level
+        var entryTags=(e.tags||[]).map(function(t){return(t.name||"").toLowerCase().trim();}).filter(Boolean);
+        // Tags from task level
+        var taskTags=((e.task&&e.task.tags)||[]).map(function(t){return(t.name||"").toLowerCase().trim();}).filter(Boolean);
+        var tagSet={};entryTags.concat(taskTags).forEach(function(t){tagSet[t]=1;});
+        var tagNames=Object.keys(tagSet);
         var ext=tagNames.filter(function(t){return t!=="willab";});
         var client=ext.length>0?ext[0]:(tagNames.indexOf("willab")>=0?"willab":"");
-        var space=e.task&&e.task.space?e.task.space.name||"":"";
-        var list=e.task&&e.task.list?e.task.list.name||"":"";
+
+        // Area: try task_location first, then task.list
+        var list=(e.task_location&&e.task_location.list_name)||
+                 (e.task&&e.task.list&&e.task.list.name)||"";
+        var folder=(e.task_location&&e.task_location.folder_name)||
+                   (e.task&&e.task.folder&&e.task.folder.name)||"";
+        var space=(e.task_location&&e.task_location.space_name)||
+                  (e.task&&e.task.space&&e.task.space.name)||"";
+        var area=list||folder||space||"";
+
         var dur=parseInt(e.duration||"0");
         var hours=dur/3600000;
         var startT=parseInt(e.start||"0");
@@ -260,17 +238,23 @@ export default function App(){
         var startHour=d?d.getHours():-1;
         var weekday=d?d.getDay():-1;
         var hasDesc=(e.description||"").trim().length>0;
-        return {user:user,space:space,area:list,client:client,hours:hours,date:d,startHour:startHour,weekday:weekday,task:taskName,hasDesc:hasDesc};
+        return{user:user,space:space,area:area,client:client,hours:hours,date:d,startHour:startHour,weekday:weekday,task:taskName,hasDesc:hasDesc};
       }).filter(function(r){return r.hours>0&&r.user&&r.date;});
 
       if(mapped.length===0){
-        setCkError("Nessuna entry trovata nel periodo selezionato");
+        setCkError("Nessuna entry trovata nel periodo");
         setCkLoading(false);
         return;
       }
 
+      // Debug summary
+      var uh={};mapped.forEach(function(r){uh[r.user]=(uh[r.user]||0)+r.hours;});
+      console.log("USERS+HOURS:",uh);
+      console.log("AREAS:",mapped.reduce(function(s,r){s[r.area]=(s[r.area]||0)+r.hours;return s;},{}));
+      console.log("CLIENTS:",mapped.reduce(function(s,r){s[r.client||"(none)"]=(s[r.client||"(none)"]+r.hours)||r.hours;return s;},{}));
+
       setAllRec(mapped);
-      setFn("ClickUp Import "+ckFrom+" → "+ckTo+" ("+mapped.length+" entries)");
+      setFn("ClickUp "+ckFrom+" to "+ckTo+" ("+mapped.length+" entries)");
       setView("dashboard");setTab("overview");
       setCkLoading(false);setCkError("");
       try{
