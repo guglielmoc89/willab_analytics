@@ -225,6 +225,24 @@ export default function App(){
     });
 
     var finishImport=function(allEntries){
+      // Debug: log first 3 entries to console
+      console.log("ClickUp raw entries:",allEntries.slice(0,3));
+      if(allEntries.length>0){
+        var e0=allEntries[0];
+        var dbg="ENTRY RAW #1:\n";
+        dbg+="user: "+JSON.stringify(e0.user)+"\n";
+        dbg+="task: "+(e0.task?e0.task.name:"null")+" | list: "+JSON.stringify(e0.task&&e0.task.list)+" | space: "+JSON.stringify(e0.task&&e0.task.space)+"\n";
+        dbg+="tags (entry): "+JSON.stringify(e0.tags)+"\n";
+        dbg+="tags (task): "+JSON.stringify(e0.task&&e0.task.tags)+"\n";
+        dbg+="task_tags: "+JSON.stringify(e0.task_tags)+"\n";
+        dbg+="duration: "+e0.duration+" | start: "+e0.start+"\n";
+        dbg+="description: "+(e0.description||"(vuota)")+"\n";
+        dbg+="task_location: "+JSON.stringify(e0.task_location)+"\n";
+        dbg+="Keys: "+Object.keys(e0).join(", ");
+        console.log(dbg);
+        alert(dbg);
+      }
+
       var mapped=allEntries.map(function(e){
         var user=e._userName||e.user&&e.user.username||"";
         var taskName=e.task?e.task.name||"":"";
