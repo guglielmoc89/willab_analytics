@@ -582,17 +582,22 @@ export default function App(){
     monthsInPeriod.forEach(function(mk){
       total+=gfMonthly(cn,mk);
     });
-    // 2. Oneshot fees: scan ALL configured months for oneshot, distribute by hours in period
+    // 2. Oneshot fees: scan ALL months (CSV + config) for oneshot, distribute by hours in period
     var totalClientHours=allRec.filter(function(r){return r.client===cn;}).reduce(function(s,r){return s+r.hours;},0);
     var periodClientHours=0;
     monthsInPeriod.forEach(function(mk){
       periodClientHours+=allRec.filter(function(r){return r.client===cn&&getMK(r.date)===mk;}).reduce(function(s,r){return s+r.hours;},0);
     });
-    allMonths.forEach(function(mk){
+    // Collect all months from both CSV data and config
+    var scanMonths={};
+    allMonths.forEach(function(mk){scanMonths[mk]=1;});
+    Object.keys(cfg).forEach(function(mk){if(mk.match(/^\d{4}-\d{2}$/)&&cfg[mk]&&cfg[mk].fees)scanMonths[mk]=1;});
+    Object.keys(scanMonths).forEach(function(mk){
       var raw=gfRaw(cn,mk);
-      if(raw&&raw.type==="oneshot"&&raw.amount){
-        // Distribute proportionally to hours in this period vs total hours
-        total+=totalClientHours>0?raw.amount*(periodClientHours/totalClientHours):0;
+      if(!raw)return;
+      var norm=gfNorm(raw);
+      if(norm.oneshot>0){
+        total+=totalClientHours>0?norm.oneshot*(periodClientHours/totalClientHours):0;
       }
     });
     return total;
