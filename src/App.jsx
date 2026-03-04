@@ -324,6 +324,8 @@ export default function App(){
   var setInternal=function(cn,val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n._internal)n._internal={};n._internal[cn]=val;return n;});};
   var isOverhead=function(pn){return cfg._overhead&&cfg._overhead[pn];};
   var setOverhead=function(pn,val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n._overhead)n._overhead={};n._overhead[pn]=val;return n;});};
+  var teamRate=cfg._teamRate||0;
+  var setTeamRate=function(val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));n._teamRate=val;return n;});};
   var extClients=useMemo(function(){var s=new Set();allRec.forEach(function(r){if(r.client&&!isInternal(r.client))s.add(r.client);});return Array.from(s).sort();},[allRec,cfg]);
   var allClients=useMemo(function(){var s=new Set();allRec.forEach(function(r){if(r.client)s.add(r.client);});return Array.from(s).sort();},[allRec]);
 
@@ -433,15 +435,67 @@ export default function App(){
     return true;
   };
 
+  var appendData=function(csvText,fileName){
+    var mapped=mapRecords(parseCSV(csvText));
+    if(!mapped.length)return false;
+    // Merge: deduplicate by user+date+task+hours (avoid exact duplicates)
+    var existing=allRec;
+    var key=function(r){return r.user+"|"+r.area+"|"+r.client+"|"+(r.date?r.date.getTime():"")+"|"+r.task+"|"+Math.round(r.hours*1000);};
+    var seen={};
+    existing.forEach(function(r){seen[key(r)]=true;});
+    var newOnly=mapped.filter(function(r){return !seen[key(r)];});
+    var merged=existing.concat(newOnly);
+    setAllRec(merged);setFn(fileName+" (+"+newOnly.length+" nuovi)");
+    setPm("month");
+    var ms=Array.from(new Set(merged.map(function(r){return getMK(r.date);}))).sort();
+    setPi(ms.length-1);setCfgM(ms[ms.length-1]||"");
+    setView("dashboard");setTab("overview");
+    return {merged:merged,added:newOnly.length};
+  };
+
   var handleFile=function(e){
     var file=e.target.files&&e.target.files[0];if(!file)return;
     var reader=new FileReader();
     reader.onload=function(ev){
       var text=ev.target.result;
-      if(loadData(text,file.name)){
-        saveCSVLocal(text,file.name);
-        sbSaveNow({csv_text:text,csv_name:file.name});
-      }else{alert("Nessun record valido.");}
+      var mapped=mapRecords(parseCSV(text));
+      if(!mapped.length){alert("Nessun record valido.");return;}
+
+      // If there are existing records, ask user
+      if(allRec.length>0){
+        var newMonths=Array.from(new Set(mapped.map(function(r){return getMK(r.date);}))).sort();
+        var existMonths=Array.from(new Set(allRec.map(function(r){return getMK(r.date);}))).sort();
+        var choice=window.confirm(
+          "Hai gia' "+allRec.length+" record caricati ("+existMonths.map(function(m){return getML(m);}).join(", ")+").\n\n"+
+          "Il nuovo CSV ha "+mapped.length+" record ("+newMonths.map(function(m){return getML(m);}).join(", ")+").\n\n"+
+          "OK = AGGIUNGI ai dati esistenti\nAnnulla = SOSTITUISCI tutto"
+        );
+        if(choice){
+          // Append
+          var result=appendData(text,file.name);
+          if(result){
+            // Save merged CSV: we need to store the combined text
+            // Since we can't easily merge CSVs as text, store the allRec as JSON
+            // Actually, keep original CSV for cloud + add new
+            var existingCSV=loadCSVLocal();
+            var combinedText=existingCSV?existingCSV.text+"\n"+text.split("\n").slice(1).join("\n"):text;
+            saveCSVLocal(combinedText,file.name);
+            sbSaveNow({csv_text:combinedText,csv_name:file.name});
+          }
+        } else {
+          // Replace
+          if(loadData(text,file.name)){
+            saveCSVLocal(text,file.name);
+            sbSaveNow({csv_text:text,csv_name:file.name});
+          }
+        }
+      } else {
+        // No existing data, just load
+        if(loadData(text,file.name)){
+          saveCSVLocal(text,file.name);
+          sbSaveNow({csv_text:text,csv_name:file.name});
+        }
+      }
     };reader.readAsText(file);
   };
 
@@ -1185,6 +1239,8 @@ export default function App(){
           <button onClick={generateReport} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><FileText size={14} strokeWidth={2}/> Report</button>
           <button onClick={exportExcel} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Download size={14} strokeWidth={2}/> Excel</button>
           <button onClick={function(){if(window.confirm("Vuoi caricare un nuovo CSV? I costi e le fee restano salvati.")){clearCSVLocal();sbSaveNow({csv_text:null,csv_name:null});setView("upload");setAllRec([]);}}} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13} strokeWidth={2}/> Nuovo</button>
+          <button onClick={function(){fr.current&&fr.current.click();}} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ac,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={14} strokeWidth={2}/> CSV</button>
+          <input ref={fr} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={handleFile}/>
           {syncSt!=="idle"&&<span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600}}>
             {syncSt==="saving"&&<Loader size={12} strokeWidth={2} style={{animation:"spin 1s linear infinite"}}/>}
             {syncSt==="saved"&&<Check size={12} strokeWidth={2.5}/>}
@@ -1425,13 +1481,14 @@ export default function App(){
                   </div>
                 </div>
                 {/* Break-even */}
-                {!c.isI&&fee>0&&c.hours>0&&c.totalCost>0&&(function(){
-                  var costPerH=c.totalCost/c.hours;
-                  var beHours=costPerH>0?fee/costPerH:0;
+                {!c.isI&&fee>0&&c.hours>0&&(function(){
+                  var beRate=teamRate>0?teamRate:(c.totalCost>0?c.totalCost/c.hours:0);
+                  var beHours=beRate>0?fee/beRate:0;
                   var usedPct=beHours>0?(c.hours/beHours)*100:0;
                   var over=c.hours>beHours;
+                  if(!beHours)return null;
                   return (<div style={{marginTop:10,padding:"8px 12px",background:over?C.rdBg:C.gnBg,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:11,color:over?C.rd:C.gn,fontWeight:600}}>Break-even: {Math.round(beHours)}h</div>
+                    <div style={{fontSize:11,color:over?C.rd:C.gn,fontWeight:600}}>Break-even{teamRate>0?" @"+fmt(teamRate)+"/h":""}: {Math.round(beHours)}h</div>
                     <div style={{fontSize:11,fontWeight:700,color:over?C.rd:C.gn}}>{fmtH(c.hours)} / {Math.round(beHours)}h ({pct(usedPct)})</div>
                   </div>);
                 })()}
@@ -1969,6 +2026,17 @@ export default function App(){
 
             {/* 2. COSTI TEAM */}
             <Accordion icon={Users} title={"Costi team — "+getML(cm)} badge={people.length+" persone"} open={cfgOpen.costs} onToggle={function(){toggleCfg("costs");}}>
+              {/* Team Rate for break-even */}
+              <div style={{background:C.acS,border:"1px solid "+C.acL,borderRadius:12,padding:14,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.ac,marginBottom:2}}>Rate orario team (break-even)</div>
+                  <div style={{fontSize:11,color:C.tm}}>Usato per calcolare il break-even dei clienti. Se vuoto, usa il rate calcolato.</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <input type="number" value={teamRate||""} placeholder="€/h" onChange={function(e){setTeamRate(parseFloat(e.target.value)||0);}} style={{...ix,width:80,textAlign:"right",fontSize:14,fontWeight:700}}/>
+                  <span style={{fontSize:12,color:C.tm,fontWeight:600}}>/h</span>
+                </div>
+              </div>
               <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Costo lordo mensile. Si eredita dal mese precedente. ✕ per azzerare.</p>
               {people.map(function(p){
                 var h=allRec.filter(function(r){return r.user===p&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
