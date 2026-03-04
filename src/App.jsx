@@ -1886,6 +1886,49 @@ export default function App(){
                   </div>
                 </div>
 
+                {/* Task per cliente */}
+                <div style={{marginTop:14}}>
+                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:8}}>Task per cliente</div>
+                  {(function(){
+                    // Group tasks by client
+                    var byClient={};
+                    pRecs.forEach(function(r){
+                      var cn=r.client||"(senza cliente)";
+                      if(!byClient[cn])byClient[cn]={h:0,tasks:{}};
+                      byClient[cn].h+=r.hours;
+                      if(r.task){
+                        if(!byClient[cn].tasks[r.task])byClient[cn].tasks[r.task]=0;
+                        byClient[cn].tasks[r.task]+=r.hours;
+                      }
+                    });
+                    var sortedClients=Object.keys(byClient).sort(function(a,b){return byClient[b].h-byClient[a].h;});
+                    return sortedClients.map(function(cn,ci){
+                      var cl=byClient[cn];
+                      var taskList=Object.keys(cl.tasks).map(function(t){return {name:t,h:cl.tasks[t]};}).sort(function(a,b){return b.h-a.h;});
+                      var isInt=isInternal(cn);
+                      var clColor=isInt?C.sl:gcc(ci);
+                      return (<div key={cn} style={{marginBottom:10,background:C.sf,border:"1px solid "+C.bdL,borderRadius:10,padding:"10px 12px"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:taskList.length>0?6:0}}>
+                          <span style={{fontSize:12,fontWeight:700,textTransform:"capitalize",display:"flex",alignItems:"center",gap:5}}>
+                            <span style={{width:7,height:7,borderRadius:99,background:clColor}}/>
+                            {cn}
+                            {isInt&&<span style={{fontSize:9,color:C.sl,background:"rgba(142,142,147,0.1)",padding:"1px 5px",borderRadius:4}}>int</span>}
+                          </span>
+                          <span style={{fontSize:12,fontWeight:800,color:clColor}}>{fmtH(cl.h)}</span>
+                        </div>
+                        {taskList.slice(0,10).map(function(t){
+                          return (<div key={t.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0 3px 12px",borderLeft:"2px solid "+clColor+"33"}}>
+                            <span style={{fontSize:11,color:C.ts,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8}}>{t.name}</span>
+                            <span style={{fontSize:11,fontWeight:600,color:C.tm,flexShrink:0}}>{fmtH(t.h)}</span>
+                          </div>);
+                        })}
+                        {taskList.length>10&&<div style={{fontSize:10,color:C.td,paddingLeft:12,marginTop:2}}>+{taskList.length-10} altri task</div>}
+                        {taskList.length===0&&<div style={{fontSize:10,color:C.td,fontStyle:"italic"}}>Nessun task specifico</div>}
+                      </div>);
+                    });
+                  })()}
+                </div>
+
                 {/* Monthly trend */}
                 {allMonths.length>1&&(<div style={{marginTop:14}}>
                   <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Trend mensile</div>
