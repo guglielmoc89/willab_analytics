@@ -286,6 +286,7 @@ export default function App(){
   var togglePl=function(name){setPlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _crNotes=useState({}),crNotes=_crNotes[0],setCrNotes=_crNotes[1];
   var setCrNote=function(client,val){setCrNotes(function(prev){var n=Object.assign({},prev);n[client]=val;return n;});};
+  var _trEcon=useState(true),trEcon=_trEcon[0],setTrEcon=_trEcon[1];
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -1150,6 +1151,200 @@ export default function App(){
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   };
 
+  var generateTeamReport=function(personName,includeEcon){
+    var pRecs=records.filter(function(r){return r.user===personName;});
+    if(!pRecs.length){alert("Nessun dato per "+personName+" nel periodo selezionato.");return;}
+    var totalH=pRecs.reduce(function(s,r){return s+r.hours;},0);
+    var entries=pRecs.length;
+
+    // Find person in PL
+    var pData=null;
+    if(data&&data.PL)data.PL.forEach(function(p){if(p.name===personName)pData=p;});
+
+    // Areas breakdown
+    var pAreas={};pRecs.forEach(function(r){pAreas[r.area]=(pAreas[r.area]||0)+r.hours;});
+    var areaList=Object.keys(pAreas).map(function(a){return{name:a,h:pAreas[a]};}).sort(function(a,b){return b.h-a.h;});
+
+    // Clients breakdown
+    var pClients={};pRecs.forEach(function(r){if(r.client)pClients[r.client]=(pClients[r.client]||0)+r.hours;});
+    var clientList=Object.keys(pClients).map(function(c){return{name:c,h:pClients[c]};}).sort(function(a,b){return b.h-a.h;});
+
+    // Tasks per client
+    var tasksByClient={};
+    pRecs.forEach(function(r){
+      var cn=r.client||"(senza cliente)";
+      if(!tasksByClient[cn])tasksByClient[cn]={h:0,tasks:{}};
+      tasksByClient[cn].h+=r.hours;
+      if(r.task){tasksByClient[cn].tasks[r.task]=(tasksByClient[cn].tasks[r.task]||0)+r.hours;}
+    });
+
+    // Hour distribution
+    var hourDist=Array(24).fill(0);
+    pRecs.forEach(function(r){if(r.startHour>=0)hourDist[r.startHour]+=r.hours;});
+
+    // Day distribution
+    var dayDist=Array(7).fill(0);
+    pRecs.forEach(function(r){if(r.weekday>=0)dayDist[r.weekday]+=r.hours;});
+    var dayNames=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
+
+    // Period dates
+    var dates=pRecs.map(function(r){return r.date;}).filter(Boolean).sort(function(a,b){return a-b;});
+    var fmtDate=function(d){return d.toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});};
+    var periodStr=dates.length>0?fmtDate(dates[0])+" — "+fmtDate(dates[dates.length-1]):"";
+
+    // Monthly trend
+    var mTrend={};
+    pRecs.forEach(function(r){var mk=getMK(r.date);mTrend[mk]=(mTrend[mk]||0)+r.hours;});
+    var trendList=Object.keys(mTrend).sort().map(function(mk){return{mk:mk,label:getML(mk),h:mTrend[mk]};});
+
+    var areaColors=["#7C5CFC","#FF9500","#34C759","#007AFF","#AF52DE","#FB923C","#FF3B30","#5856D6","#8E8E93","#FF2D55"];
+
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report '+personName+' — Willab</title>';
+    html+='<style>';
+    html+='*{margin:0;padding:0;box-sizing:border-box}';
+    html+='body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:32px 40px;color:#1a1a1a;font-size:13px;line-height:1.5;max-width:800px;margin:0 auto;background:#fff}';
+    html+='.header{margin-bottom:28px;padding-bottom:16px;border-bottom:2px solid #7C5CFC}';
+    html+='.header h1{font-size:24px;font-weight:800;color:#1a1a1a}';
+    html+='.header .sub{font-size:13px;color:#888;margin-top:4px}';
+    html+='.section{margin-bottom:24px}';
+    html+='.section-title{font-size:15px;font-weight:700;color:#7C5CFC;margin-bottom:12px;padding-bottom:4px;border-bottom:1px solid #eee}';
+    html+='.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}';
+    html+='.kpi{background:#f8f8fc;border-radius:10px;padding:14px;text-align:center;border:1px solid #eee}';
+    html+='.kpi .label{font-size:10px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:.06em}';
+    html+='.kpi .val{font-size:20px;font-weight:800;margin-top:4px}';
+    html+='.kpi .sub{font-size:11px;color:#888;margin-top:2px}';
+    html+='.bar-row{display:flex;align-items:center;margin-bottom:6px;gap:8px}';
+    html+='.bar-label{font-size:12px;font-weight:600;width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+    html+='.bar-bg{flex:1;height:8px;background:#f0f0f0;border-radius:99px;overflow:hidden}';
+    html+='.bar-fill{height:100%;border-radius:99px}';
+    html+='.bar-val{font-size:12px;font-weight:700;width:50px;text-align:right;flex-shrink:0}';
+    html+='.client-block{background:#fafafa;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee}';
+    html+='.client-name{font-size:14px;font-weight:700;text-transform:capitalize;margin-bottom:8px;display:flex;justify-content:space-between}';
+    html+='.task-row{display:flex;justify-content:space-between;padding:3px 0 3px 12px;border-left:2px solid #ddd;font-size:12px;margin-bottom:2px}';
+    html+='.task-name{color:#444;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px}';
+    html+='.task-hours{color:#888;font-weight:600;flex-shrink:0}';
+    html+='.chart-bar{display:flex;gap:3px;align-items:flex-end;height:50px;margin-bottom:4px}';
+    html+='.chart-col{flex:1;text-align:center}';
+    html+='.chart-col .bar{margin:0 auto;border-radius:3px}';
+    html+='.chart-col .lbl{font-size:9px;color:#888;margin-top:3px}';
+    html+='.footer{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}';
+    html+='@media print{body{padding:16px}@page{margin:12mm;size:A4}}';
+    html+='</style></head><body>';
+
+    // Header
+    html+='<div class="header">';
+    html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">';
+    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800">'+personName.charAt(0).toUpperCase()+'</div>';
+    html+='<div><h1>'+personName+'</h1><div class="sub">'+periodStr+'</div></div></div></div>';
+
+    // KPIs
+    html+='<div class="kpi-row">';
+    html+='<div class="kpi"><div class="label">Ore totali</div><div class="val">'+fmtH(totalH)+'</div><div class="sub">'+entries+' entries</div></div>';
+    html+='<div class="kpi"><div class="label">Aree</div><div class="val">'+areaList.length+'</div><div class="sub">aree di lavoro</div></div>';
+    html+='<div class="kpi"><div class="label">Clienti</div><div class="val">'+clientList.length+'</div><div class="sub">clienti serviti</div></div>';
+    if(includeEcon&&pData){
+      html+='<div class="kpi"><div class="label">Costo</div><div class="val">'+fmt(pData.totalCost)+'</div><div class="sub">'+fmt(pData.rate)+'/h</div></div>';
+      if(pData.revenue>0)html+='<div class="kpi"><div class="label">Ricavo attr.</div><div class="val">'+fmt(pData.revenue)+'</div><div class="sub">'+(pData.hours>0?fmt(pData.revenue/pData.hours):0)+'/h</div></div>';
+      if(pData.revenue>0)html+='<div class="kpi"><div class="label">Margine</div><div class="val" style="color:'+(pData.margin>=0?"#34C759":"#FF3B30")+'">'+fmt(pData.margin)+'</div><div class="sub">'+(pData.margin>=0?"+":"")+pct(pData.mp)+'</div></div>';
+    }
+    html+='</div>';
+
+    // Areas
+    html+='<div class="section"><div class="section-title">Aree di lavoro</div>';
+    var maxAH=areaList[0]?areaList[0].h:1;
+    areaList.forEach(function(a,i){
+      var pctW=Math.round(a.h/maxAH*100);
+      var clr=areaColors[i%areaColors.length];
+      html+='<div class="bar-row"><span class="bar-label"><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr+';margin-right:6px"></span>'+a.name+'</span>';
+      html+='<div class="bar-bg"><div class="bar-fill" style="width:'+pctW+'%;background:'+clr+'"></div></div>';
+      html+='<span class="bar-val">'+fmtH(a.h)+'</span></div>';
+    });
+    html+='</div>';
+
+    // Clients
+    html+='<div class="section"><div class="section-title">Clienti</div>';
+    var maxCH=clientList[0]?clientList[0].h:1;
+    clientList.forEach(function(c,i){
+      var pctW2=Math.round(c.h/maxCH*100);
+      var clr2=areaColors[i%areaColors.length];
+      html+='<div class="bar-row"><span class="bar-label" style="text-transform:capitalize"><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr2+';margin-right:6px"></span>'+c.name+'</span>';
+      html+='<div class="bar-bg"><div class="bar-fill" style="width:'+pctW2+'%;background:'+clr2+'"></div></div>';
+      html+='<span class="bar-val">'+fmtH(c.h)+'</span></div>';
+    });
+    html+='</div>';
+
+    // Tasks per client
+    html+='<div class="section"><div class="section-title">Task per cliente</div>';
+    var sortedTC=Object.keys(tasksByClient).sort(function(a,b){return tasksByClient[b].h-tasksByClient[a].h;});
+    sortedTC.forEach(function(cn,ci){
+      var cd=tasksByClient[cn];
+      var clr3=areaColors[ci%areaColors.length];
+      html+='<div class="client-block">';
+      html+='<div class="client-name"><span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr3+';margin-right:6px"></span>'+cn+'</span><span style="color:'+clr3+'">'+fmtH(cd.h)+'</span></div>';
+      var sortedTasks=Object.keys(cd.tasks).map(function(t){return{name:t,h:cd.tasks[t]};}).sort(function(a,b){return b.h-a.h;});
+      sortedTasks.slice(0,12).forEach(function(t){
+        html+='<div class="task-row" style="border-color:'+clr3+'44"><span class="task-name">'+t.name+'</span><span class="task-hours">'+fmtH(t.h)+'</span></div>';
+      });
+      if(sortedTasks.length>12)html+='<div style="font-size:10px;color:#aaa;padding-left:12px;margin-top:4px">+'+(sortedTasks.length-12)+' altri task</div>';
+      html+='</div>';
+    });
+    html+='</div>';
+
+    // Hour distribution
+    html+='<div class="section"><div class="section-title">Distribuzione oraria</div>';
+    html+='<div class="chart-bar">';
+    var maxHD=Math.max.apply(null,hourDist);
+    for(var i=0;i<24;i++){
+      var bH=maxHD>0?Math.max(hourDist[i]/maxHD*40,hourDist[i]>0?3:0):0;
+      html+='<div class="chart-col"><div class="bar" style="width:80%;height:'+bH+'px;background:'+(hourDist[i]>0?"#7C5CFC":"#eee")+'"></div>';
+      if(i%3===0)html+='<div class="lbl">'+i+'</div>';
+      html+='</div>';
+    }
+    html+='</div></div>';
+
+    // Day distribution
+    html+='<div class="section"><div class="section-title">Distribuzione settimanale</div>';
+    html+='<div class="chart-bar">';
+    var maxDD=Math.max.apply(null,dayDist);
+    [1,2,3,4,5,6,0].forEach(function(d){
+      var bH2=maxDD>0?Math.max(dayDist[d]/maxDD*40,dayDist[d]>0?3:0):0;
+      var isWe=d===0||d===6;
+      html+='<div class="chart-col"><div class="bar" style="width:80%;height:'+bH2+'px;background:'+(isWe?"#FF9500":"#7C5CFC88")+'"></div>';
+      html+='<div class="lbl" style="color:'+(isWe?"#FF9500":"#888")+'">'+dayNames[d]+'</div>';
+      if(dayDist[d]>0)html+='<div class="lbl">'+fmtH(dayDist[d])+'</div>';
+      html+='</div>';
+    });
+    html+='</div></div>';
+
+    // Monthly trend
+    if(trendList.length>1){
+      html+='<div class="section"><div class="section-title">Trend mensile</div>';
+      html+='<div class="chart-bar">';
+      var maxTH=Math.max.apply(null,trendList.map(function(t){return t.h;}));
+      trendList.forEach(function(t){
+        var bH3=maxTH>0?Math.max(t.h/maxTH*40,t.h>0?3:0):0;
+        html+='<div class="chart-col"><div class="bar" style="width:70%;height:'+bH3+'px;background:#7C5CFC"></div>';
+        html+='<div class="lbl">'+t.label.split(" ")[0].slice(0,3)+'</div>';
+        html+='<div class="lbl">'+fmtH(t.h)+'</div></div>';
+      });
+      html+='</div></div>';
+    }
+
+    // Footer
+    html+='<div class="footer">Willab Analytics · Report generato automaticamente'+(includeEcon?'':' · KPI economici esclusi')+'</div>';
+    html+='</body></html>';
+
+    var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;
+    a.download="Report-"+personName.replace(/\s+/g,"-")+".html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  };
+
   // ═══ UPLOAD ═══
   if(view==="upload"){
     return (
@@ -1954,6 +2149,18 @@ export default function App(){
                     })}
                   </div>
                 </div>)}
+
+                {/* Report persona */}
+                <div style={{marginTop:14,padding:"12px 14px",background:C.sf,border:"1px solid "+C.bdL,borderRadius:10}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <span style={{fontSize:12,fontWeight:700,color:C.tm}}>Report persona</span>
+                    <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.tm,cursor:"pointer"}}>
+                      <input type="checkbox" checked={trEcon} onChange={function(){setTrEcon(!trEcon);}} style={{accentColor:C.ac}}/>
+                      KPI economici
+                    </label>
+                  </div>
+                  <button onClick={function(e){e.stopPropagation();generateTeamReport(p.name,trEcon);}} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><FileText size={14}/> Genera report</button>
+                </div>
 
               </div>)}
             </div>);
