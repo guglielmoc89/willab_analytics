@@ -1282,10 +1282,9 @@ export default function App(){
       html+='<div class="client-block">';
       html+='<div class="client-name"><span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr3+';margin-right:6px"></span>'+cn+'</span><span style="color:'+clr3+'">'+fmtH(cd.h)+'</span></div>';
       var sortedTasks=Object.keys(cd.tasks).map(function(t){return{name:t,h:cd.tasks[t]};}).sort(function(a,b){return b.h-a.h;});
-      sortedTasks.slice(0,12).forEach(function(t){
+      sortedTasks.forEach(function(t){
         html+='<div class="task-row" style="border-color:'+clr3+'44"><span class="task-name">'+t.name+'</span><span class="task-hours">'+fmtH(t.h)+'</span></div>';
       });
-      if(sortedTasks.length>12)html+='<div style="font-size:10px;color:#aaa;padding-left:12px;margin-top:4px">+'+(sortedTasks.length-12)+' altri task</div>';
       html+='</div>';
     });
     html+='</div>';
