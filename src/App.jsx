@@ -1,6 +1,6 @@
 import React from "react";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Clock, DollarSign, Home, TrendingUp, FolderOpen, Tag, PieChart, UserCircle, Users, Settings, FileText, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Info as InfoIcon, Plus, X, Copy, Upload, Calendar, Search, LayoutDashboard, Download, AlertTriangle, Check, Cloud, Loader, Briefcase } from "lucide-react";
+import { Clock, DollarSign, Home, TrendingUp, FolderOpen, Tag, PieChart, UserCircle, Users, Settings, FileText, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Info as InfoIcon, Plus, X, Copy, Upload, Calendar, Search, LayoutDashboard, Download, AlertTriangle, Check, Cloud, Loader, Briefcase, Camera, Lightbulb } from "lucide-react";
 
 function canStore(){try{localStorage.setItem("_t","1");localStorage.removeItem("_t");return true;}catch(e){return false;}}
 function loadCfgLocal(){try{if(!canStore())return {};var d=localStorage.getItem("wl-cfg");return d?JSON.parse(d):{};}catch(e){return {};}}
@@ -286,6 +286,8 @@ export default function App(){
   var togglePl=function(name){setPlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _crNotes=useState({}),crNotes=_crNotes[0],setCrNotes=_crNotes[1];
   var setCrNote=function(client,val){setCrNotes(function(prev){var n=Object.assign({},prev);n[client]=val;return n;});};
+  var _alOpen=useState({}),alOpen=_alOpen[0],setAlOpen=_alOpen[1];
+  var toggleAl=function(name){setAlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _trEcon=useState(true),trEcon=_trEcon[0],setTrEcon=_trEcon[1];
   var undoTimer=useRef(null);
   var fr=useRef(null);
@@ -325,6 +327,8 @@ export default function App(){
   var setInternal=function(cn,val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n._internal)n._internal={};n._internal[cn]=val;return n;});};
   var isOverhead=function(pn){return cfg._overhead&&cfg._overhead[pn];};
   var setOverhead=function(pn,val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(!n._overhead)n._overhead={};n._overhead[pn]=val;return n;});};
+  var teamRate=cfg._teamRate||0;
+  var setTeamRate=function(val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));n._teamRate=val;return n;});};
   var teamRate=cfg._teamRate||0;
   var setTeamRate=function(val){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));n._teamRate=val;return n;});};
   var extClients=useMemo(function(){var s=new Set();allRec.forEach(function(r){if(r.client&&!isInternal(r.client))s.add(r.client);});return Array.from(s).sort();},[allRec,cfg]);
@@ -878,7 +882,7 @@ export default function App(){
     // KPIs
     html+='<div class="kpi-row">';
     html+='<div class="kpi"><div class="label">Ore totali</div><div class="val">'+fmtH(tH)+'</div><div class="sub">di cui '+fmtH(iH)+' interne ('+pct(tH>0?iH/tH*100:0)+')</div></div>';
-    html+='<div class="kpi"><div class="label">Costo team</div><div class="val">'+fmt(tC)+'</div><div class="sub">Media '+fmt(avgCostH)+'/h</div></div>';
+    html+='<div class="kpi"><div class="label">Costi totali</div><div class="val">'+fmt(tC)+'</div><div class="sub">Media '+fmt(avgCostH)+'/h</div></div>';
     html+='<div class="kpi"><div class="label">Ricavi</div><div class="val" style="color:#059669">'+fmt(tF)+'</div><div class="sub">Media '+fmt(avgRevH)+'/h fatt.</div></div>';
     html+='<div class="kpi"><div class="label">Margine</div><div class="val" style="color:'+(tM>=0?"#059669":"#dc2626")+'">'+fmt(tM)+'</div><div class="sub">'+(tM>=0?"+":"")+pct(mPct)+' margine</div></div>';
     html+='</div>';
@@ -1151,199 +1155,6 @@ export default function App(){
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   };
 
-  var generateTeamReport=function(personName,includeEcon){
-    var pRecs=records.filter(function(r){return r.user===personName;});
-    if(!pRecs.length){alert("Nessun dato per "+personName+" nel periodo selezionato.");return;}
-    var totalH=pRecs.reduce(function(s,r){return s+r.hours;},0);
-    var entries=pRecs.length;
-
-    // Find person in PL
-    var pData=null;
-    if(data&&data.PL)data.PL.forEach(function(p){if(p.name===personName)pData=p;});
-
-    // Areas breakdown
-    var pAreas={};pRecs.forEach(function(r){pAreas[r.area]=(pAreas[r.area]||0)+r.hours;});
-    var areaList=Object.keys(pAreas).map(function(a){return{name:a,h:pAreas[a]};}).sort(function(a,b){return b.h-a.h;});
-
-    // Clients breakdown
-    var pClients={};pRecs.forEach(function(r){if(r.client)pClients[r.client]=(pClients[r.client]||0)+r.hours;});
-    var clientList=Object.keys(pClients).map(function(c){return{name:c,h:pClients[c]};}).sort(function(a,b){return b.h-a.h;});
-
-    // Tasks per client
-    var tasksByClient={};
-    pRecs.forEach(function(r){
-      var cn=r.client||"(senza cliente)";
-      if(!tasksByClient[cn])tasksByClient[cn]={h:0,tasks:{}};
-      tasksByClient[cn].h+=r.hours;
-      if(r.task){tasksByClient[cn].tasks[r.task]=(tasksByClient[cn].tasks[r.task]||0)+r.hours;}
-    });
-
-    // Hour distribution
-    var hourDist=Array(24).fill(0);
-    pRecs.forEach(function(r){if(r.startHour>=0)hourDist[r.startHour]+=r.hours;});
-
-    // Day distribution
-    var dayDist=Array(7).fill(0);
-    pRecs.forEach(function(r){if(r.weekday>=0)dayDist[r.weekday]+=r.hours;});
-    var dayNames=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-
-    // Period dates
-    var dates=pRecs.map(function(r){return r.date;}).filter(Boolean).sort(function(a,b){return a-b;});
-    var fmtDate=function(d){return d.toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});};
-    var periodStr=dates.length>0?fmtDate(dates[0])+" — "+fmtDate(dates[dates.length-1]):"";
-
-    // Monthly trend
-    var mTrend={};
-    pRecs.forEach(function(r){var mk=getMK(r.date);mTrend[mk]=(mTrend[mk]||0)+r.hours;});
-    var trendList=Object.keys(mTrend).sort().map(function(mk){return{mk:mk,label:getML(mk),h:mTrend[mk]};});
-
-    var areaColors=["#7C5CFC","#FF9500","#34C759","#007AFF","#AF52DE","#FB923C","#FF3B30","#5856D6","#8E8E93","#FF2D55"];
-
-    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report '+personName+' — Willab</title>';
-    html+='<style>';
-    html+='*{margin:0;padding:0;box-sizing:border-box}';
-    html+='body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:32px 40px;color:#1a1a1a;font-size:13px;line-height:1.5;max-width:800px;margin:0 auto;background:#fff}';
-    html+='.header{margin-bottom:28px;padding-bottom:16px;border-bottom:2px solid #7C5CFC}';
-    html+='.header h1{font-size:24px;font-weight:800;color:#1a1a1a}';
-    html+='.header .sub{font-size:13px;color:#888;margin-top:4px}';
-    html+='.section{margin-bottom:24px}';
-    html+='.section-title{font-size:15px;font-weight:700;color:#7C5CFC;margin-bottom:12px;padding-bottom:4px;border-bottom:1px solid #eee}';
-    html+='.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}';
-    html+='.kpi{background:#f8f8fc;border-radius:10px;padding:14px;text-align:center;border:1px solid #eee}';
-    html+='.kpi .label{font-size:10px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:.06em}';
-    html+='.kpi .val{font-size:20px;font-weight:800;margin-top:4px}';
-    html+='.kpi .sub{font-size:11px;color:#888;margin-top:2px}';
-    html+='.bar-row{display:flex;align-items:center;margin-bottom:6px;gap:8px}';
-    html+='.bar-label{font-size:12px;font-weight:600;width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
-    html+='.bar-bg{flex:1;height:8px;background:#f0f0f0;border-radius:99px;overflow:hidden}';
-    html+='.bar-fill{height:100%;border-radius:99px}';
-    html+='.bar-val{font-size:12px;font-weight:700;width:50px;text-align:right;flex-shrink:0}';
-    html+='.client-block{background:#fafafa;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee}';
-    html+='.client-name{font-size:14px;font-weight:700;text-transform:capitalize;margin-bottom:8px;display:flex;justify-content:space-between}';
-    html+='.task-row{display:flex;justify-content:space-between;padding:3px 0 3px 12px;border-left:2px solid #ddd;font-size:12px;margin-bottom:2px}';
-    html+='.task-name{color:#444;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px}';
-    html+='.task-hours{color:#888;font-weight:600;flex-shrink:0}';
-    html+='.chart-bar{display:flex;gap:3px;align-items:flex-end;height:50px;margin-bottom:4px}';
-    html+='.chart-col{flex:1;text-align:center}';
-    html+='.chart-col .bar{margin:0 auto;border-radius:3px}';
-    html+='.chart-col .lbl{font-size:9px;color:#888;margin-top:3px}';
-    html+='.footer{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}';
-    html+='@media print{body{padding:16px}@page{margin:12mm;size:A4}}';
-    html+='</style></head><body>';
-
-    // Header
-    html+='<div class="header">';
-    html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">';
-    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800">'+personName.charAt(0).toUpperCase()+'</div>';
-    html+='<div><h1>'+personName+'</h1><div class="sub">'+periodStr+'</div></div></div></div>';
-
-    // KPIs
-    html+='<div class="kpi-row">';
-    html+='<div class="kpi"><div class="label">Ore totali</div><div class="val">'+fmtH(totalH)+'</div><div class="sub">'+entries+' entries</div></div>';
-    html+='<div class="kpi"><div class="label">Aree</div><div class="val">'+areaList.length+'</div><div class="sub">aree di lavoro</div></div>';
-    html+='<div class="kpi"><div class="label">Clienti</div><div class="val">'+clientList.length+'</div><div class="sub">clienti serviti</div></div>';
-    if(includeEcon&&pData){
-      html+='<div class="kpi"><div class="label">Costo</div><div class="val">'+fmt(pData.totalCost)+'</div><div class="sub">'+fmt(pData.rate)+'/h</div></div>';
-      if(pData.revenue>0)html+='<div class="kpi"><div class="label">Ricavo attr.</div><div class="val">'+fmt(pData.revenue)+'</div><div class="sub">'+(pData.hours>0?fmt(pData.revenue/pData.hours):0)+'/h</div></div>';
-      if(pData.revenue>0)html+='<div class="kpi"><div class="label">Margine</div><div class="val" style="color:'+(pData.margin>=0?"#34C759":"#FF3B30")+'">'+fmt(pData.margin)+'</div><div class="sub">'+(pData.margin>=0?"+":"")+pct(pData.mp)+'</div></div>';
-    }
-    html+='</div>';
-
-    // Areas
-    html+='<div class="section"><div class="section-title">Aree di lavoro</div>';
-    var maxAH=areaList[0]?areaList[0].h:1;
-    areaList.forEach(function(a,i){
-      var pctW=Math.round(a.h/maxAH*100);
-      var clr=areaColors[i%areaColors.length];
-      html+='<div class="bar-row"><span class="bar-label"><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr+';margin-right:6px"></span>'+a.name+'</span>';
-      html+='<div class="bar-bg"><div class="bar-fill" style="width:'+pctW+'%;background:'+clr+'"></div></div>';
-      html+='<span class="bar-val">'+fmtH(a.h)+'</span></div>';
-    });
-    html+='</div>';
-
-    // Clients
-    html+='<div class="section"><div class="section-title">Clienti</div>';
-    var maxCH=clientList[0]?clientList[0].h:1;
-    clientList.forEach(function(c,i){
-      var pctW2=Math.round(c.h/maxCH*100);
-      var clr2=areaColors[i%areaColors.length];
-      html+='<div class="bar-row"><span class="bar-label" style="text-transform:capitalize"><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr2+';margin-right:6px"></span>'+c.name+'</span>';
-      html+='<div class="bar-bg"><div class="bar-fill" style="width:'+pctW2+'%;background:'+clr2+'"></div></div>';
-      html+='<span class="bar-val">'+fmtH(c.h)+'</span></div>';
-    });
-    html+='</div>';
-
-    // Tasks per client
-    html+='<div class="section"><div class="section-title">Task per cliente</div>';
-    var sortedTC=Object.keys(tasksByClient).sort(function(a,b){return tasksByClient[b].h-tasksByClient[a].h;});
-    sortedTC.forEach(function(cn,ci){
-      var cd=tasksByClient[cn];
-      var clr3=areaColors[ci%areaColors.length];
-      html+='<div class="client-block">';
-      html+='<div class="client-name"><span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:'+clr3+';margin-right:6px"></span>'+cn+'</span><span style="color:'+clr3+'">'+fmtH(cd.h)+'</span></div>';
-      var sortedTasks=Object.keys(cd.tasks).map(function(t){return{name:t,h:cd.tasks[t]};}).sort(function(a,b){return b.h-a.h;});
-      sortedTasks.forEach(function(t){
-        html+='<div class="task-row" style="border-color:'+clr3+'44"><span class="task-name">'+t.name+'</span><span class="task-hours">'+fmtH(t.h)+'</span></div>';
-      });
-      html+='</div>';
-    });
-    html+='</div>';
-
-    // Hour distribution
-    html+='<div class="section"><div class="section-title">Distribuzione oraria</div>';
-    html+='<div class="chart-bar">';
-    var maxHD=Math.max.apply(null,hourDist);
-    for(var i=0;i<24;i++){
-      var bH=maxHD>0?Math.max(hourDist[i]/maxHD*40,hourDist[i]>0?3:0):0;
-      html+='<div class="chart-col"><div class="bar" style="width:80%;height:'+bH+'px;background:'+(hourDist[i]>0?"#7C5CFC":"#eee")+'"></div>';
-      if(i%3===0)html+='<div class="lbl">'+i+'</div>';
-      html+='</div>';
-    }
-    html+='</div></div>';
-
-    // Day distribution
-    html+='<div class="section"><div class="section-title">Distribuzione settimanale</div>';
-    html+='<div class="chart-bar">';
-    var maxDD=Math.max.apply(null,dayDist);
-    [1,2,3,4,5,6,0].forEach(function(d){
-      var bH2=maxDD>0?Math.max(dayDist[d]/maxDD*40,dayDist[d]>0?3:0):0;
-      var isWe=d===0||d===6;
-      html+='<div class="chart-col"><div class="bar" style="width:80%;height:'+bH2+'px;background:'+(isWe?"#FF9500":"#7C5CFC88")+'"></div>';
-      html+='<div class="lbl" style="color:'+(isWe?"#FF9500":"#888")+'">'+dayNames[d]+'</div>';
-      if(dayDist[d]>0)html+='<div class="lbl">'+fmtH(dayDist[d])+'</div>';
-      html+='</div>';
-    });
-    html+='</div></div>';
-
-    // Monthly trend
-    if(trendList.length>1){
-      html+='<div class="section"><div class="section-title">Trend mensile</div>';
-      html+='<div class="chart-bar">';
-      var maxTH=Math.max.apply(null,trendList.map(function(t){return t.h;}));
-      trendList.forEach(function(t){
-        var bH3=maxTH>0?Math.max(t.h/maxTH*40,t.h>0?3:0):0;
-        html+='<div class="chart-col"><div class="bar" style="width:70%;height:'+bH3+'px;background:#7C5CFC"></div>';
-        html+='<div class="lbl">'+t.label.split(" ")[0].slice(0,3)+'</div>';
-        html+='<div class="lbl">'+fmtH(t.h)+'</div></div>';
-      });
-      html+='</div></div>';
-    }
-
-    // Footer
-    html+='<div class="footer">Willab Analytics · Report generato automaticamente'+(includeEcon?'':' · KPI economici esclusi')+'</div>';
-    html+='</body></html>';
-
-    var blob=new Blob([html],{type:"text/html;charset=utf-8"});
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement("a");
-    a.href=url;
-    a.download="Report-"+personName.replace(/\s+/g,"-")+".html";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){URL.revokeObjectURL(url);},1000);
-  };
-
   // ═══ UPLOAD ═══
   if(view==="upload"){
     return (
@@ -1467,14 +1278,14 @@ export default function App(){
         {/* KPIs */}
         <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:18}}>
           <KPI icon={Clock} label="Ore totali" value={fmtH(tH)} sub={PL.length+" persone"} color={C.bl} bg={C.blBg} info="Somma di tutte le ore tracciate nel periodo selezionato, incluse ore interne."/>
-          <KPI icon={DollarSign} label="Costo team" value={fmt(tC)} sub={tH>0?fmt(tC/tH)+"/h":"—"} color={C.am} bg={C.amBg} info="Somma dei costi di tutto il team. Costo orario = costo mensile persona / ore tracciate quel mese."/>
+          <KPI icon={DollarSign} label="Costi totali" value={fmt(tC)} sub={tH>0?fmt(tC/tH)+"/h":"—"} color={C.am} bg={C.amBg} info="Somma di costi team (ore x rate) + costi persone fisso + costi extra."/>
           <KPI icon={Home} label="Ore interne" value={fmtH(iH)} sub={fmt(iC)} color={C.sl} bg="rgba(142,142,147,0.06)" info="Ore taggate [willab] senza fee associata (riunioni, admin, formazione)."/>
           <KPI icon={TrendingUp} label="Margine" value={fmt(tM)} sub={tF>0?(tM>=0?"+":"")+pct(mPct):"Imposta fee →"} color={tM>=0?C.gn:C.rd} bg={tM>=0?C.gnBg:C.rdBg} info="Margine = Fee clienti - Costi totali team. La % indica il margine sui ricavi."/>
         </div>
 
         {/* Tabs */}
         <div style={{display:"flex",gap:2,marginBottom:18,background:C.sf,borderRadius:13,padding:3,border:"1px solid "+C.bdL,width:"fit-content"}}>
-          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
+          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
         </div>
 
         {/* SEARCH BAR + SORT - shown on clients, people, areas, team */}
@@ -1722,7 +1533,7 @@ export default function App(){
                   </div>);
                 })()}
                 {/* Client Report */}
-                {!c.isI&&(<div style={{marginTop:14,padding:14,background:C.sf,borderRadius:10,border:"1px solid "+C.bdL}} onClick={function(e){e.stopPropagation();}}>
+                {(<div style={{marginTop:14,padding:14,background:C.sf,borderRadius:10,border:"1px solid "+C.bdL}} onClick={function(e){e.stopPropagation();}}>
                   <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:8}}>Report cliente</div>
                   <textarea value={crNotes[c.name]||""} onChange={function(e){setCrNote(c.name,e.target.value);}} onClick={function(e){e.stopPropagation();}} placeholder="Note per il cliente (risultati, prossimi step...)" rows={3} style={{...ix,width:"100%",fontSize:12,resize:"vertical",marginBottom:8,lineHeight:1.5}}/>
                   <button onClick={function(e){e.stopPropagation();generateClientReport(c.name,crNotes[c.name]||"");}} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><FileText size={14}/> Genera report</button>
@@ -1781,7 +1592,7 @@ export default function App(){
                   <div><div style={{fontSize:15,fontWeight:700,textTransform:"capitalize",marginBottom:2}}>{c.name}</div><span style={{fontSize:12,color:C.tm}}>{fmtH(c.hours)}</span></div>
                   {c.fee>0&&<Badge value={(pos?"+":"")+pct(c.mp)} positive={pos}/>}
                 </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8}}><span style={{color:C.tm}}>Costo team</span><span style={{fontWeight:600}}>{fmt(c.cost)}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8}}><span style={{color:C.tm}}>Costi totali</span><span style={{fontWeight:600}}>{fmt(c.cost)}</span></div>
                 {c.extraCost>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8}}><span style={{color:C.or}}>+ Costi extra</span><span style={{fontWeight:600,color:C.or}}>{fmt(c.extraCost)}</span></div>}
                 {c.fee>0?(<div><Bar value={c.totalCost} max={c.fee} color={clr} positive={pos}/><div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginTop:8}}><span style={{color:C.tm}}>Fee: {fmt(c.fee)}</span><span style={{fontWeight:800,color:clr}}>{fmt(c.margin)}</span></div></div>):(<div style={{fontSize:12,color:C.td,fontStyle:"italic"}}>Fee non configurata</div>)}
               </div>);
@@ -2149,21 +1960,200 @@ export default function App(){
                   </div>
                 </div>)}
 
-                {/* Report persona */}
-                <div style={{marginTop:14,padding:"12px 14px",background:C.sf,border:"1px solid "+C.bdL,borderRadius:10}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.tm}}>Report persona</span>
-                    <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.tm,cursor:"pointer"}}>
-                      <input type="checkbox" checked={trEcon} onChange={function(){setTrEcon(!trEcon);}} style={{accentColor:C.ac}}/>
-                      KPI economici
-                    </label>
-                  </div>
-                  <button onClick={function(e){e.stopPropagation();generateTeamReport(p.name,trEcon);}} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><FileText size={14}/> Genera report</button>
-                </div>
-
               </div>)}
             </div>);
           })}</div>
+        )}
+
+        {/* INSIGHT TAB */}
+        {tab==="insight"&&(
+          <div>
+            {(function(){
+              // Compute insights
+              var insights=[];
+
+              // 1. Time entries without client
+              var noClient=records.filter(function(r){return !r.client;});
+              if(noClient.length>0){
+                var ncByUser={};
+                noClient.forEach(function(r){
+                  if(!ncByUser[r.user])ncByUser[r.user]={h:0,tasks:new Set(),entries:0};
+                  ncByUser[r.user].h+=r.hours;
+                  ncByUser[r.user].entries++;
+                  if(r.task)ncByUser[r.user].tasks.add(r.task);
+                });
+                var ncList=Object.keys(ncByUser).map(function(u){return{name:u,h:ncByUser[u].h,entries:ncByUser[u].entries,tasks:Array.from(ncByUser[u].tasks)};}).sort(function(a,b){return b.h-a.h;});
+                var ncTotal=ncList.reduce(function(s,u){return s+u.h;},0);
+                insights.push({type:"warn",title:"Ore senza cliente",sub:fmtH(ncTotal)+" totali · "+noClient.length+" entries senza tag cliente",details:ncList});
+              }
+
+              // 2. Time entries without area
+              var noArea=records.filter(function(r){return !r.area;});
+              if(noArea.length>0){
+                var naByUser={};
+                noArea.forEach(function(r){
+                  if(!naByUser[r.user])naByUser[r.user]={h:0,entries:0};
+                  naByUser[r.user].h+=r.hours;
+                  naByUser[r.user].entries++;
+                });
+                var naList=Object.keys(naByUser).map(function(u){return{name:u,h:naByUser[u].h,entries:naByUser[u].entries};}).sort(function(a,b){return b.h-a.h;});
+                var naTotal=naList.reduce(function(s,u){return s+u.h;},0);
+                insights.push({type:"warn",title:"Ore senza area",sub:fmtH(naTotal)+" totali · "+noArea.length+" entries senza List Name",details:naList});
+              }
+
+              // 3. People with hours but no cost configured
+              var noCost=people.filter(function(p){
+                var hasHours=records.some(function(r){return r.user===p;});
+                var hasCost=false;
+                monthsInPeriod.forEach(function(mk){if(gc(p,mk)>0)hasCost=true;});
+                return hasHours&&!hasCost&&!isOverhead(p);
+              });
+              if(noCost.length>0){
+                insights.push({type:"warn",title:"Persone senza costo",sub:noCost.length+" persone con ore ma senza costo in Config",nameList:noCost});
+              }
+
+              // 4. External clients with hours but no fee
+              var noFee=[];
+              if(data&&data.CL)data.CL.forEach(function(c){
+                if(!c.isI&&c.hours>0){
+                  var fee=getEF(c.name);
+                  if(!fee||fee<=0)noFee.push({name:c.name,h:c.hours});
+                }
+              });
+              if(noFee.length>0){
+                insights.push({type:"warn",title:"Clienti senza fee",sub:noFee.length+" clienti esterni con ore ma senza fee configurata",nameList:noFee.map(function(c){return c.name+" ("+fmtH(c.h)+")";})});
+              }
+
+              // 5. Clients in loss
+              var inLoss=[];
+              if(data&&data.CL)data.CL.forEach(function(c){
+                if(!c.isI&&c.fee>0&&c.margin<0)inLoss.push({name:c.name,margin:c.margin,mp:c.mp,fee:c.fee,cost:c.totalCost});
+              });
+              if(inLoss.length>0){
+                insights.push({type:"danger",title:"Clienti in perdita",sub:inLoss.length+" clienti con margine negativo",clientLoss:inLoss});
+              }
+
+              // 6. Low margin clients (<15%)
+              var lowMargin=[];
+              if(data&&data.CL)data.CL.forEach(function(c){
+                if(!c.isI&&c.fee>0&&c.margin>=0&&c.mp<15&&c.mp>0)lowMargin.push({name:c.name,mp:c.mp});
+              });
+              if(lowMargin.length>0){
+                insights.push({type:"info",title:"Margini bassi",sub:lowMargin.length+" clienti con margine sotto il 15%",nameList:lowMargin.map(function(c){return c.name+" ("+pct(c.mp)+")";})});
+              }
+
+              // 7. People >160h
+              var overwork=[];
+              if(data&&data.PL)data.PL.forEach(function(p){
+                if(p.hours>160)overwork.push({name:p.name,h:p.hours});
+              });
+              if(overwork.length>0){
+                insights.push({type:"info",title:"Carico elevato",sub:overwork.length+" persone con oltre 160h nel periodo",nameList:overwork.map(function(p){return p.name+" ("+fmtH(p.h)+")";})});
+              }
+
+              // 8. Weekend work
+              var weekendH={};
+              records.forEach(function(r){
+                if(r.weekday===0||r.weekday===6){
+                  weekendH[r.user]=(weekendH[r.user]||0)+r.hours;
+                }
+              });
+              var weList=Object.keys(weekendH).filter(function(u){return weekendH[u]>2;}).map(function(u){return{name:u,h:weekendH[u]};}).sort(function(a,b){return b.h-a.h;});
+              if(weList.length>0){
+                insights.push({type:"info",title:"Lavoro nel weekend",sub:weList.length+" persone con ore nel weekend",details:weList});
+              }
+
+              // 9. Night work (before 8am or after 22pm)
+              var nightH={};
+              records.forEach(function(r){
+                if(r.startHour>=0&&(r.startHour<8||r.startHour>=22)){
+                  nightH[r.user]=(nightH[r.user]||0)+r.hours;
+                }
+              });
+              var nightList=Object.keys(nightH).filter(function(u){return nightH[u]>1;}).map(function(u){return{name:u,h:nightH[u]};}).sort(function(a,b){return b.h-a.h;});
+              if(nightList.length>0){
+                insights.push({type:"info",title:"Lavoro notturno",sub:nightList.length+" persone con ore prima delle 8 o dopo le 22",details:nightList});
+              }
+
+              // 10. Low description rate
+              var descRate={};
+              records.forEach(function(r){
+                if(!descRate[r.user])descRate[r.user]={total:0,has:0};
+                descRate[r.user].total++;
+                if(r.hasDesc)descRate[r.user].has++;
+              });
+              var lowDesc=Object.keys(descRate).filter(function(u){
+                var d=descRate[u];
+                return d.total>10&&(d.has/d.total)<0.3;
+              }).map(function(u){var d=descRate[u];return{name:u,pct:Math.round(d.has/d.total*100)};}).sort(function(a,b){return a.pct-b.pct;});
+              if(lowDesc.length>0){
+                insights.push({type:"info",title:"Poche descrizioni",sub:lowDesc.length+" persone compilano meno del 30% delle descrizioni",nameList:lowDesc.map(function(p){return p.name+" ("+p.pct+"%)";})});
+              }
+
+              // Render
+              var typeColors={danger:{bg:C.rdBg,color:C.rd,icon:"🔴"},warn:{bg:C.amBg,color:C.am,icon:"🟡"},info:{bg:C.blBg||"rgba(0,122,255,0.06)",color:C.bl||"#007AFF",icon:"🔵"},ok:{bg:C.gnBg,color:C.gn,icon:"🟢"}};
+
+              if(insights.length===0){
+                return (<div style={{...bx,padding:32,textAlign:"center"}}>
+                  <div style={{fontSize:32,marginBottom:12}}>✅</div>
+                  <div style={{fontSize:16,fontWeight:700,marginBottom:6}}>Tutto in ordine!</div>
+                  <div style={{fontSize:13,color:C.tm}}>Nessun problema rilevato nei dati del periodo selezionato.</div>
+                </div>);
+              }
+
+              return (<div>
+                {/* Summary */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:C.rd}}>{insights.filter(function(i){return i.type==="danger";}).length}</div><div style={{fontSize:10,color:C.tm,fontWeight:600}}>Critici</div></div>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:C.am}}>{insights.filter(function(i){return i.type==="warn";}).length}</div><div style={{fontSize:10,color:C.tm,fontWeight:600}}>Attenzione</div></div>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:C.bl||"#007AFF"}}>{insights.filter(function(i){return i.type==="info";}).length}</div><div style={{fontSize:10,color:C.tm,fontWeight:600}}>Info</div></div>
+                </div>
+
+                {insights.map(function(ins,ii){
+                  var tc=typeColors[ins.type]||typeColors.info;
+                  return (<div key={ii} style={{...bx,marginBottom:10,overflow:"hidden"}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                      <span style={{fontSize:16}}>{tc.icon}</span>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:14,fontWeight:700,marginBottom:2}}>{ins.title}</div>
+                        <div style={{fontSize:12,color:C.tm,marginBottom:ins.details||ins.nameList||ins.clientLoss?8:0}}>{ins.sub}</div>
+
+                        {/* Details: person list with hours */}
+                        {ins.details&&ins.details.map(function(d,di){
+                          return (<div key={di} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:di<ins.details.length-1?"1px solid "+C.bdL:"none"}}>
+                            <div>
+                              <span style={{fontSize:12,fontWeight:600}}>{d.name}</span>
+                              {d.tasks&&d.tasks.length>0&&<div style={{fontSize:10,color:C.td,marginTop:1}}>{d.tasks.slice(0,3).join(", ")}{d.tasks.length>3?"...":""}</div>}
+                            </div>
+                            <span style={{fontSize:12,fontWeight:700,color:tc.color}}>{fmtH(d.h)}</span>
+                          </div>);
+                        })}
+
+                        {/* Name list */}
+                        {ins.nameList&&(<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>
+                          {ins.nameList.map(function(n,ni){
+                            var name=typeof n==="string"?n:n;
+                            return (<span key={ni} style={{fontSize:11,background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:6,fontWeight:600}}>{name}</span>);
+                          })}
+                        </div>)}
+
+                        {/* Client loss details */}
+                        {ins.clientLoss&&ins.clientLoss.map(function(cl,ci){
+                          return (<div key={ci} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:ci<ins.clientLoss.length-1?"1px solid "+C.bdL:"none"}}>
+                            <span style={{fontSize:12,fontWeight:600,textTransform:"capitalize"}}>{cl.name}</span>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:C.rd}}>{fmt(cl.margin)}</div>
+                              <div style={{fontSize:10,color:C.tm}}>Fee {fmt(cl.fee)} · Costo {fmt(cl.cost)}</div>
+                            </div>
+                          </div>);
+                        })}
+                      </div>
+                    </div>
+                  </div>);
+                })}
+              </div>);
+            })()}
+          </div>
         )}
 
         {/* COSTI EXTRA TAB */}
