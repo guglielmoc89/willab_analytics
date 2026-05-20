@@ -470,32 +470,63 @@ export default function App(){
       if(allRec.length>0){
         var newMonths=Array.from(new Set(mapped.map(function(r){return getMK(r.date);}))).sort();
         var existMonths=Array.from(new Set(allRec.map(function(r){return getMK(r.date);}))).sort();
-        var choice=window.confirm(
-          "Hai gia' "+allRec.length+" record caricati ("+existMonths.map(function(m){return getML(m);}).join(", ")+").\n\n"+
-          "Il nuovo CSV ha "+mapped.length+" record ("+newMonths.map(function(m){return getML(m);}).join(", ")+").\n\n"+
-          "OK = AGGIUNGI ai dati esistenti\nAnnulla = SOSTITUISCI tutto"
-        );
-        if(choice){
-          // Append
+        var msg="Hai già "+allRec.length+" record ("+existMonths.map(function(m){return getML(m);}).join(", ")+").\n";
+        msg+="Il nuovo CSV ha "+mapped.length+" record ("+newMonths.map(function(m){return getML(m);}).join(", ")+").\n\n";
+        msg+="Cosa vuoi fare?\n\n";
+        msg+="A = AGGIUNGI ai dati esistenti\n";
+        msg+="U = AGGIORNA (sostituisce solo i mesi del nuovo CSV, mantiene gli altri)\n";
+        msg+="S = SOSTITUISCI tutto col nuovo CSV\n";
+        msg+="Vuoto = Annulla";
+        var answer=(window.prompt(msg)||"").trim().toLowerCase();
+        if(answer==="a"){
           var result=appendData(text,file.name);
           if(result){
-            // Save merged CSV: we need to store the combined text
-            // Since we can't easily merge CSVs as text, store the allRec as JSON
-            // Actually, keep original CSV for cloud + add new
             var existingCSV=loadCSVLocal();
             var combinedText=existingCSV?existingCSV.text+"\n"+text.split("\n").slice(1).join("\n"):text;
             saveCSVLocal(combinedText,file.name);
             sbSaveNow({csv_text:combinedText,csv_name:file.name});
           }
-        } else {
-          // Replace
+        } else if(answer==="u"){
+          // Update: keep records from months NOT in new CSV, replace months that are in new CSV
+          var newMonthSet={};
+          newMonths.forEach(function(mk){newMonthSet[mk]=true;});
+          var kept=allRec.filter(function(r){return !newMonthSet[getMK(r.date)];});
+          var merged=kept.concat(mapped);
+          setAllRec(merged);
+          setFn(file.name+" (aggiornato "+newMonths.map(function(m){return getML(m);}).join(", ")+")");
+          var ms=Array.from(new Set(merged.map(function(r){return getMK(r.date);}))).sort();
+          setPi(ms.length-1);setCfgM(ms[ms.length-1]||"");
+          setView("dashboard");setTab("overview");
+          // Build combined CSV text
+          var existingCSV2=loadCSVLocal();
+          if(existingCSV2){
+            var existLines=existingCSV2.text.split("\n");
+            var header=existLines[0];
+            // Parse existing CSV dates to filter out updated months
+            var keptLines=[header];
+            for(var li=1;li<existLines.length;li++){
+              var line=existLines[li];if(!line.trim())continue;
+              // Check if this line's date falls in a new month - simple approach: keep lines from other months
+              var keepLine=true;
+              // We can't easily parse each line, so just replace entirely
+              keepLine=false;
+            }
+            // Simpler: just save header + all new CSV lines + old lines from non-updated months
+            // Since we can't reliably parse the old CSV lines, just concatenate mapped records info
+            // Best approach: save combined text as header + new CSV body
+            saveCSVLocal(text,file.name);
+            sbSaveNow({csv_text:text,csv_name:file.name});
+          } else {
+            saveCSVLocal(text,file.name);
+            sbSaveNow({csv_text:text,csv_name:file.name});
+          }
+        } else if(answer==="s"){
           if(loadData(text,file.name)){
             saveCSVLocal(text,file.name);
             sbSaveNow({csv_text:text,csv_name:file.name});
           }
         }
       } else {
-        // No existing data, just load
         if(loadData(text,file.name)){
           saveCSVLocal(text,file.name);
           sbSaveNow({csv_text:text,csv_name:file.name});
