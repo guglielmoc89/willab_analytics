@@ -82,8 +82,9 @@ function mapRecords(rows){
     var startHour=date?date.getHours():-1;
     var weekday=date?date.getDay():-1;
     var task=r["Task Name"]||"";
+    var taskId=r["Task ID"]||"";
     var hasDesc=(r["Description"]||"").trim().length>0;
-    return {user:user,space:space,area:area,client:client,hours:hours,date:date,startHour:startHour,weekday:weekday,task:task,hasDesc:hasDesc};
+    return {user:user,space:space,area:area,client:client,hours:hours,date:date,startHour:startHour,weekday:weekday,task:task,taskId:taskId,hasDesc:hasDesc};
   }).filter(function(r){return r.hours>0&&r.user&&r.date;});
 }
 
@@ -273,7 +274,7 @@ export default function App(){
   var _cm=useState(""),cfgM=_cm[0],setCfgM=_cm[1];
   var _po=useState({clients:true,areas:false,people:false,trend:false}),profOpen=_po[0],setProfOpen=_po[1];
   var toggleProf=function(k){setProfOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
-  var _co=useState({internal:false,costs:true,fees:true,extras:false,budgets:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
+  var _co=useState({internal:false,costs:true,fees:true,extras:false,budgets:false,multimedia:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
   var toggleCfg=function(k){setCfgOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
   var _sync=useState("idle"),syncSt=_sync[0],setSyncSt=_sync[1];
   var _search=useState(""),search=_search[0],setSearch=_search[1];
@@ -289,6 +290,98 @@ export default function App(){
   var _alOpen=useState({}),alOpen=_alOpen[0],setAlOpen=_alOpen[1];
   var toggleAl=function(name){setAlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _trEcon=useState(true),trEcon=_trEcon[0],setTrEcon=_trEcon[1];
+  var _mmLoading=useState(false),mmLoading=_mmLoading[0],setMmLoading=_mmLoading[1];
+  var _mmStatus=useState(""),mmStatus=_mmStatus[0],setMmStatus=_mmStatus[1];
+  var mmMap=cfg._mmMap||{};
+
+  var MM_LIST_ID="901500178548"; // Multimedia list ID
+
+  var updateMmMapping=function(token){
+    if(!token){alert("Inserisci il token API di ClickUp");return;}
+    setMmLoading(true);setMmStatus("Scaricando task root...");
+    var hdrs={"Authorization":token,"Content-Type":"application/json"};
+    var newMap={};
+
+    // Step 1: Get all tasks in Multimedia list (page 0, then paginate)
+    var allTasks=[];
+    var fetchTasks=function(page){
+      fetch("https://api.clickup.com/api/v2/list/"+MM_LIST_ID+"/task?archived=false&subtasks=true&include_closed=true&page="+page,{headers:hdrs})
+      .then(function(r){if(!r.ok)throw new Error("API error: "+r.status);return r.json();})
+      .then(function(json){
+        var tasks=json.tasks||[];
+        allTasks=allTasks.concat(tasks);
+        if(tasks.length>=100){fetchTasks(page+1);}
+        else{processTasks();}
+      })
+      .catch(function(err){setMmStatus("Errore: "+err.message);setMmLoading(false);});
+    };
+
+    var processTasks=function(){
+      setMmStatus("Trovati "+allTasks.length+" task. Cercando contenitori...");
+      // Find containers: subtasks of root tasks that have "Editing"/"Riprese"/"Trasferte" in name
+      var containerIds=[];
+      allTasks.forEach(function(t){
+        var tl=(t.name||"").toLowerCase();
+        var cat=null;
+        if(tl.match(/^riprese\b/)||tl.match(/riprese video/)||tl.match(/riprese foto/))cat="Riprese";
+        else if(tl.match(/^editing\b/)||tl.match(/editing video/)||tl.match(/editing foto/))cat="Editing";
+        else if(tl.match(/^trasferte?\b/)||tl.match(/trasferte? video/)||tl.match(/trasferte? foto/))cat="Trasferta";
+        if(cat){
+          newMap[t.id]=cat;
+          containerIds.push({id:t.id,cat:cat,name:t.name});
+        }
+      });
+      setMmStatus("Trovati "+containerIds.length+" contenitori. Scaricando sotto-subtask...");
+
+      // Step 2: For each container, get its subtasks recursively
+      var done=0;
+      if(containerIds.length===0){finishMapping();}
+
+      var fetchChildren=function(parentId,cat,depth){
+        fetch("https://api.clickup.com/api/v2/task/"+parentId+"?include_subtasks=true",{headers:hdrs})
+        .then(function(r){return r.json();})
+        .then(function(task){
+          var subs=task.subtasks||[];
+          subs.forEach(function(s){
+            newMap[s.id]=cat;
+            // If this subtask also has children, recurse (max depth 3)
+            if(s.subtasks_count&&s.subtasks_count>0&&depth<3){
+              fetchChildren(s.id,cat,depth+1);
+            }
+          });
+          done++;
+          setMmStatus("Processati "+done+"/"+containerIds.length+" contenitori ("+Object.keys(newMap).length+" task mappati)...");
+          if(done>=containerIds.length){
+            // Wait a bit for any recursive calls
+            setTimeout(finishMapping,1000);
+          }
+        })
+        .catch(function(){done++;if(done>=containerIds.length)setTimeout(finishMapping,1000);});
+      };
+
+      containerIds.forEach(function(c){
+        fetchChildren(c.id,c.cat,0);
+      });
+    };
+
+    var finishMapping=function(){
+      setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));n._mmMap=newMap;return n;});
+      setMmStatus("Mapping completato: "+Object.keys(newMap).length+" task mappati!");
+      setMmLoading(false);
+    };
+
+    fetchTasks(0);
+  };
+
+  var getMmCat=function(taskId,taskName){
+    if(mmMap[taskId])return mmMap[taskId];
+    // Keyword fallback
+    var tl=(taskName||"").toLowerCase();
+    if(tl.match(/^riprese\b/)||tl.match(/riprese video/)||tl.match(/riprese foto/)||tl.indexOf("shooting")>=0||tl.indexOf("sopralluogo")>=0)return "Riprese";
+    if(tl.match(/^editing\b/)||tl.match(/editing video/)||tl.match(/editing foto/)||tl.indexOf("montaggio")>=0||tl.indexOf("post produzione")>=0||tl.indexOf("post-produzione")>=0)return "Editing";
+    if(tl.match(/^trasferte?\b/)||tl.match(/trasferte? video/)||tl.match(/trasferte? foto/)||tl.indexOf("trasferta")>=0)return "Trasferta";
+    return "Contenuti";
+  };
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -1316,7 +1409,7 @@ export default function App(){
 
         {/* Tabs */}
         <div style={{display:"flex",gap:2,marginBottom:18,background:C.sf,borderRadius:13,padding:3,border:"1px solid "+C.bdL,width:"fit-content"}}>
-          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
+          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[Camera,"multimedia","Multimedia"],[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
         </div>
 
         {/* SEARCH BAR + SORT - shown on clients, people, areas, team */}
@@ -1996,6 +2089,114 @@ export default function App(){
           })}</div>
         )}
 
+        {/* MULTIMEDIA TAB */}
+        {tab==="multimedia"&&(
+          <div>
+            {(function(){
+              var mmRecs=records.filter(function(r){return r.area==="Multimedia";});
+              if(mmRecs.length===0)return (<div style={{...bx,padding:32,textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>🎬</div><div style={{fontSize:16,fontWeight:700,marginBottom:6}}>Nessun dato Multimedia</div><div style={{fontSize:13,color:C.tm}}>Carica un CSV con record nella lista "Multimedia".</div></div>);
+
+              var totalH=mmRecs.reduce(function(s,r){return s+r.hours;},0);
+              var mapSize=Object.keys(mmMap).length;
+
+              // Categorize each record
+              mmRecs.forEach(function(r){r._mmCat=getMmCat(r.taskId,r.task);});
+
+              // Group by client
+              var byClient={};
+              mmRecs.forEach(function(r){
+                var cn=r.client||"(senza cliente)";
+                if(!byClient[cn])byClient[cn]={h:0,cats:{},people:{}};
+                byClient[cn].h+=r.hours;
+                byClient[cn].people[r.user]=1;
+                var cat=r._mmCat;
+                if(!byClient[cn].cats[cat])byClient[cn].cats[cat]={h:0,tasks:{}};
+                byClient[cn].cats[cat].h+=r.hours;
+                if(r.task){
+                  if(!byClient[cn].cats[cat].tasks[r.task])byClient[cn].cats[cat].tasks[r.task]=0;
+                  byClient[cn].cats[cat].tasks[r.task]+=r.hours;
+                }
+              });
+              var sortedClients=Object.keys(byClient).sort(function(a,b){return byClient[b].h-byClient[a].h;});
+
+              // Global category totals
+              var catTotals={};
+              mmRecs.forEach(function(r){catTotals[r._mmCat]=(catTotals[r._mmCat]||0)+r.hours;});
+
+              var catColors={"Riprese":"#FF9500","Editing":"#AF52DE","Trasferta":"#FF3B30","Contenuti":"#34C759"};
+              var catIcons={"Riprese":"📷","Editing":"🎬","Trasferta":"🚗","Contenuti":"🎥"};
+              var catOrder=["Riprese","Editing","Trasferta","Contenuti"];
+
+              // Accordion state for multimedia clients
+              var _mmOpen=alOpen; // reuse alOpen state
+              var toggleMm=toggleAl;
+
+              return (<div>
+                {/* KPIs */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:9,fontWeight:700,color:C.bl,letterSpacing:".04em"}}>ORE TOTALI</div><div style={{fontSize:20,fontWeight:800}}>{fmtH(totalH)}</div><div style={{fontSize:10,color:C.tm}}>{mmRecs.length} entries</div></div>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:9,fontWeight:700,color:C.am,letterSpacing:".04em"}}>CLIENTI</div><div style={{fontSize:20,fontWeight:800}}>{sortedClients.length}</div><div style={{fontSize:10,color:C.tm}}>con multimedia</div></div>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:9,fontWeight:700,color:C.ac,letterSpacing:".04em"}}>MAPPING</div><div style={{fontSize:20,fontWeight:800}}>{mapSize}</div><div style={{fontSize:10,color:C.tm}}>task mappati</div></div>
+                </div>
+
+                {/* Category pills */}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+                  {catOrder.map(function(cat){
+                    var h=catTotals[cat]||0;
+                    if(h<=0)return null;
+                    return (<div key={cat} style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:"#fff",border:"1px solid "+C.bdL}}>
+                      <span style={{width:7,height:7,borderRadius:99,background:catColors[cat]}}/>
+                      {catIcons[cat]} {cat}: {fmtH(h)} ({pct(h/totalH*100)})
+                    </div>);
+                  })}
+                </div>
+
+                {mapSize===0&&(<div style={{...bx,padding:14,marginBottom:14,background:C.amBg,borderColor:C.am}}>
+                  <div style={{fontSize:12,fontWeight:700,color:C.am,marginBottom:4}}>⚠️ Mapping non configurato</div>
+                  <div style={{fontSize:11,color:C.tm}}>Vai in Config → sezione Multimedia per aggiornare il mapping. Senza mapping, la categorizzazione usa solo le keyword nel nome del task.</div>
+                </div>)}
+
+                {/* Client cards */}
+                {sortedClients.map(function(cn,ci){
+                  var cd=byClient[cn];
+                  var isOpen=_mmOpen["mm_"+cn];
+                  var clr=gcc(ci);
+                  return (<div key={cn} style={{...bx,marginBottom:10,overflow:"hidden"}}>
+                    <div onClick={function(){toggleMm("mm_"+cn);}} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"2px 0"}}>
+                      <span style={{width:10,height:10,borderRadius:3,background:clr,flexShrink:0}}/>
+                      <span style={{fontSize:14,fontWeight:700,textTransform:"capitalize",flex:1}}>{cn}</span>
+                      <span style={{fontSize:11,color:C.tm}}>{Object.keys(cd.people).length+" pers."}</span>
+                      <span style={{fontSize:15,fontWeight:800,color:clr}}>{fmtH(cd.h)}</span>
+                      <ChevronDown size={14} color={C.tm} style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}/>
+                    </div>
+
+                    {isOpen&&(<div style={{marginTop:12}}>
+                      {/* Category breakdown */}
+                      {catOrder.map(function(cat){
+                        if(!cd.cats[cat])return null;
+                        var catD=cd.cats[cat];
+                        var cclr=catColors[cat];
+                        var sortedTasks=Object.keys(catD.tasks).map(function(t){return{name:t,h:catD.tasks[t]};}).sort(function(a,b){return b.h-a.h;});
+                        return (<div key={cat} style={{marginBottom:12}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,padding:"6px 10px",borderRadius:8,background:cclr+"11",color:cclr,marginBottom:6}}>
+                            {catIcons[cat]} {cat} — {fmtH(catD.h)}
+                          </div>
+                          {sortedTasks.map(function(t){
+                            return (<div key={t.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0 3px 14px",borderLeft:"2px solid "+cclr+"44",marginBottom:1}}>
+                              <span style={{fontSize:11,color:C.ts,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8}}>{t.name}</span>
+                              <span style={{fontSize:11,fontWeight:600,color:C.tm,flexShrink:0}}>{fmtH(t.h)}</span>
+                            </div>);
+                          })}
+                        </div>);
+                      })}
+                    </div>)}
+                  </div>);
+                })}
+              </div>);
+            })()}
+          </div>
+        )}
+
         {/* INSIGHT TAB */}
         {tab==="insight"&&(
           <div>
@@ -2476,6 +2677,26 @@ export default function App(){
                 </div>);
               })}
               <button onClick={function(){addBudget("","Nuovo progetto",0);}} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px dashed "+C.ac+"44",background:"transparent",color:C.ac,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={14}/> Aggiungi budget</button>
+            </Accordion>
+
+            {/* Multimedia Mapping */}
+            <Accordion icon={Camera} title="Mapping Multimedia" badge={Object.keys(mmMap).length+" task mappati"} open={cfgOpen.multimedia} onToggle={function(){toggleCfg("multimedia");}}>
+              <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Mappa i task della lista Multimedia alle categorie Riprese/Editing/Trasferta. Richiede il token API ClickUp.</p>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <input id="ck-token-mm" type="password" defaultValue={typeof localStorage!=="undefined"?localStorage.getItem("wl_ck_token")||"":""} placeholder="Token API ClickUp (pk_...)" style={{...ix,flex:1,fontSize:12}}/>
+                <button onClick={function(){var tok=document.getElementById("ck-token-mm").value;if(tok)try{localStorage.setItem("wl_ck_token",tok);}catch(e){}updateMmMapping(tok);}} disabled={mmLoading} style={{padding:"8px 16px",borderRadius:8,border:"none",background:mmLoading?"#ccc":"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:12,fontWeight:700,cursor:mmLoading?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{mmLoading?"Aggiornando...":"Aggiorna mapping"}</button>
+              </div>
+              {mmStatus&&<div style={{padding:"8px 12px",background:mmLoading?C.amBg:C.gnBg,borderRadius:8,fontSize:11,color:mmLoading?C.am:C.gn,fontWeight:600,marginBottom:10}}>{mmStatus}</div>}
+              {Object.keys(mmMap).length>0&&(<div>
+                <div style={{fontSize:11,color:C.tm,marginBottom:6}}>Categorie mappate:</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {["Riprese","Editing","Trasferta"].map(function(cat){
+                    var count=Object.values(mmMap).filter(function(v){return v===cat;}).length;
+                    var colors={"Riprese":"#FF9500","Editing":"#AF52DE","Trasferta":"#FF3B30"};
+                    return (<span key={cat} style={{fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,background:colors[cat]+"15",color:colors[cat]}}>{cat}: {count} task</span>);
+                  })}
+                </div>
+              </div>)}
             </Accordion>
 
             <div style={{...bx,padding:12,background:C.gn+"08",borderColor:C.gn+"22"}}><span style={{fontSize:12,color:C.gn}}>✓ Salvato automaticamente nel cloud</span></div>
