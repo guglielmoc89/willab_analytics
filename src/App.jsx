@@ -1941,8 +1941,8 @@ export default function App(){
 
                 {/* Monthly trend */}
                 {allMonths.length>1&&(<div style={{marginTop:14}}>
-                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6}}>Trend mensile</div>
-                  <div style={{display:"flex",gap:6,alignItems:"flex-end",height:50}}>
+                  <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:10}}>Trend mensile</div>
+                  <div style={{display:"flex",gap:6,alignItems:"flex-end",height:70,paddingTop:20}}>
                     {monthlyAgg.map(function(m){
                       var ph=m.pp[p.name]||0;
                       var maxPH=Math.max.apply(null,monthlyAgg.map(function(x){return x.pp[p.name]||0;}));
@@ -2123,7 +2123,7 @@ export default function App(){
                           return (<div key={di} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:di<ins.details.length-1?"1px solid "+C.bdL:"none"}}>
                             <div>
                               <span style={{fontSize:12,fontWeight:600}}>{d.name}</span>
-                              {d.tasks&&d.tasks.length>0&&<div style={{fontSize:10,color:C.td,marginTop:1}}>{d.tasks.slice(0,3).join(", ")}{d.tasks.length>3?"...":""}</div>}
+                              {d.tasks&&d.tasks.length>0&&<div style={{fontSize:10,color:C.td,marginTop:1}}>{d.tasks.join(", ")}</div>}
                             </div>
                             <span style={{fontSize:12,fontWeight:700,color:tc.color}}>{fmtH(d.h)}</span>
                           </div>);
