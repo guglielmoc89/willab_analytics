@@ -448,12 +448,15 @@ export default function App(){
   };
   var gfMonthly=function(c,m){
     var raw=gfRaw(c,m);var n=gfNorm(raw);
-    if(n.monthly)return n.monthly;
-    // Fallback: most recent month with monthly fee
-    var sorted=allMonths.filter(function(mk){return mk<=m;}).sort();
+    // If this month has an explicit monthly value (including 0), use it
+    if(raw&&(raw.monthly!==undefined&&raw.monthly!==null||(raw.type==="monthly")))return n.monthly;
+    // Fallback: most recent month with explicit monthly fee
+    var sorted=allMonths.filter(function(mk){return mk<m;}).sort();
     for(var i=sorted.length-1;i>=0;i--){
-      var r=gfNorm(gfRaw(c,sorted[i]));
-      if(r.monthly)return r.monthly;
+      var prev=gfRaw(c,sorted[i]);
+      if(prev&&(prev.monthly!==undefined&&prev.monthly!==null||(prev.type==="monthly"))){
+        return gfNorm(prev).monthly;
+      }
     }
     return 0;
   };
@@ -2555,8 +2558,8 @@ export default function App(){
               <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Mensile si eredita. One-shot si distribuisce sulle ore. Si sommano.</p>
               {allClients.map(function(c,ci){
                 var raw=cfgFees[c];var norm=gfNorm(raw);
+                var hasDirectM=raw&&(raw.monthly!==undefined&&raw.monthly!==null||(raw.type==="monthly"));
                 var inheritedVal=gfMonthly(c,cm);
-                var hasDirectM=norm.monthly>0;
                 var isInheritedM=!hasDirectM&&inheritedVal>0;
                 var h=allRec.filter(function(r){return r.client===c&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
                 return (<div key={c} style={{background:C.sf,border:"1px solid "+C.bdL,borderRadius:12,padding:16,marginBottom:10,opacity:h>0?1:0.5}}>
@@ -2573,7 +2576,7 @@ export default function App(){
                           <input type="number" min="0" step="100" value={hasDirectM?norm.monthly:""} onChange={function(e){sf(c,cm,"monthly",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:28,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder={isInheritedM?Math.round(inheritedVal):"0"}/>
                           <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11,fontWeight:600}}>€/m</span>
                         </div>
-                        {isInheritedM&&<button onClick={function(){sf(c,cm,"monthly",0);}} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
+                        {(hasDirectM||isInheritedM)&&<button onClick={function(){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(n[cm]&&n[cm].fees&&n[cm].fees[c]){delete n[cm].fees[c].monthly;if(n[cm].fees[c].type==="monthly"){delete n[cm].fees[c].type;delete n[cm].fees[c].amount;}}return n;});}} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
                       </div>
                     </div>
                     <div>
