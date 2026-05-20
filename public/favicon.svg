@@ -1,18 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#9B7DFF"/>
-      <stop offset="100%" style="stop-color:#6C3FE0"/>
+      <stop offset="0%" style="stop-color:#2A2A2E"/>
+      <stop offset="100%" style="stop-color:#1C1B1F"/>
     </linearGradient>
     <linearGradient id="gl" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:rgba(255,255,255,0.22)"/>
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.08)"/>
       <stop offset="100%" style="stop-color:rgba(255,255,255,0)"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
   <rect width="512" height="260" rx="112" fill="url(#gl)"/>
-  <!-- Willab logo scaled and centered -->
-  <g transform="translate(136,88) scale(0.59)">
+  <g transform="translate(148,135) scale(0.53)">
     <path fill="white" opacity="0.95" d="M384.14,97.37L225.9,6.02c-14.14-8.03-31.34-8.03-45.1,0L22.55,97.37C8.41,105.4,0,120.31,0,136.74v183.09c0,16.05,8.79,30.96,22.55,39.37,69.57,40.13,17.2,9.94,113.14,65.36v-156.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v25.99l-45.1-25.99v-182.71L203.73,46.15l158.24,91.35v182.71l-45.1,25.99v-182.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v209.08c96.7-55.81,43.96-25.23,113.14-65.36,14.14-8.03,22.55-22.93,22.55-39.37v-183.09c0-16.05-8.79-30.96-22.55-39.37M180.41,267.08c0-16.05,8.79-30.96,22.55-39.37l22.55-13v235.07c-14.14,8.03-31.34,8.03-45.1,0v-183.09.38Z"/>
   </g>
 </svg>
