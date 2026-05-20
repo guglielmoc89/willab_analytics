@@ -151,6 +151,8 @@ function Accordion(props){
   </div>);
 }
 
+var WillabLogo=function(props){var s=props.size||20;return (<svg width={s} height={s*1.12} viewBox="0 0 407.46 455.81" xmlns="http://www.w3.org/2000/svg"><path fill={props.color||"#fff"} d="M384.14,97.37L225.9,6.02c-14.14-8.03-31.34-8.03-45.1,0L22.55,97.37C8.41,105.4,0,120.31,0,136.74v183.09c0,16.05,8.79,30.96,22.55,39.37,69.57,40.13,17.2,9.94,113.14,65.36v-156.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v25.99l-45.1-25.99v-182.71L203.73,46.15l158.24,91.35v182.71l-45.1,25.99v-182.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v209.08c96.7-55.81,43.96-25.23,113.14-65.36,14.14-8.03,22.55-22.93,22.55-39.37v-183.09c0-16.05-8.79-30.96-22.55-39.37M180.41,267.08c0-16.05,8.79-30.96,22.55-39.37l22.55-13v235.07c-14.14,8.03-31.34,8.03-45.1,0v-183.09.38Z"/></svg>);};
+
 export default function App(){
   var _s=useState("upload"),view=_s[0],setView=_s[1];
   var _ckMode=useState(false),ckMode=_ckMode[0],setCkMode=_ckMode[1];
@@ -1194,7 +1196,7 @@ export default function App(){
 
     // Header
     html+='<div class="header">';
-    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);margin:0 auto 14px;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:16px;font-weight:800">W</span></div>';
+    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);margin:0 auto 14px;display:flex;align-items:center;justify-content:center"><svg width="22" height="25" viewBox="0 0 407.46 455.81" xmlns="http://www.w3.org/2000/svg"><path fill="#fff" d="M384.14,97.37L225.9,6.02c-14.14-8.03-31.34-8.03-45.1,0L22.55,97.37C8.41,105.4,0,120.31,0,136.74v183.09c0,16.05,8.79,30.96,22.55,39.37,69.57,40.13,17.2,9.94,113.14,65.36v-156.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v25.99l-45.1-25.99v-182.71L203.73,46.15l158.24,91.35v182.71l-45.1,25.99v-182.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v209.08c96.7-55.81,43.96-25.23,113.14-65.36,14.14-8.03,22.55-22.93,22.55-39.37v-183.09c0-16.05-8.79-30.96-22.55-39.37M180.41,267.08c0-16.05,8.79-30.96,22.55-39.37l22.55-13v235.07c-14.14,8.03-31.34,8.03-45.1,0v-183.09.38Z"/></svg></div>';
     html+='<h1>'+clientName+'</h1>';
     html+='<div class="period">Report attività — '+periodStr+'</div>';
     html+='<div class="meta">Generato il '+(new Date().toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"}))+'</div>';
@@ -1285,7 +1287,7 @@ export default function App(){
       <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",padding:24,WebkitFontSmoothing:"antialiased"}}>
         <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
           <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",margin:"0 auto 20px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{color:"#fff",fontSize:20,fontWeight:800}}>W</span>
+            <span style={{color:"#fff",fontSize:20,fontWeight:800}}><WillabLogo size={28}/></span>
           </div>
           <h1 style={{fontSize:28,fontWeight:800,margin:"0 0 6px",letterSpacing:"-.03em",color:C.tx}}>Willab Analytics</h1>
           <p style={{color:C.tm,fontSize:14,lineHeight:1.6,marginBottom:32}}>Carica l'export Time Tracking di ClickUp</p>
@@ -1365,7 +1367,7 @@ export default function App(){
       {/* Header */}
       <div style={{background:"rgba(255,255,255,0.72)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:"1px solid "+C.bdL,padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:13,fontWeight:800}}>W</span></div>
+          <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><WillabLogo size={16}/></div>
           <span style={{fontSize:15,fontWeight:700,letterSpacing:"-.01em"}}>Willab Analytics</span>
           <span style={{fontSize:12,color:C.td,marginLeft:4}}>{fn}</span>
         </div>
