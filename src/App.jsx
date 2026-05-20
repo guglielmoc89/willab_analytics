@@ -1977,12 +1977,12 @@ export default function App(){
               if(noClient.length>0){
                 var ncByUser={};
                 noClient.forEach(function(r){
-                  if(!ncByUser[r.user])ncByUser[r.user]={h:0,tasks:new Set(),entries:0};
+                  if(!ncByUser[r.user])ncByUser[r.user]={h:0,taskMap:{},entries:0};
                   ncByUser[r.user].h+=r.hours;
                   ncByUser[r.user].entries++;
-                  if(r.task)ncByUser[r.user].tasks.add(r.task);
+                  if(r.task)ncByUser[r.user].taskMap[r.task]=1;
                 });
-                var ncList=Object.keys(ncByUser).map(function(u){return{name:u,h:ncByUser[u].h,entries:ncByUser[u].entries,tasks:Array.from(ncByUser[u].tasks)};}).sort(function(a,b){return b.h-a.h;});
+                var ncList=Object.keys(ncByUser).map(function(u){return{name:u,h:ncByUser[u].h,entries:ncByUser[u].entries,tasks:Object.keys(ncByUser[u].taskMap)};}).sort(function(a,b){return b.h-a.h;});
                 var ncTotal=ncList.reduce(function(s,u){return s+u.h;},0);
                 insights.push({type:"warn",title:"Ore senza cliente",sub:fmtH(ncTotal)+" totali · "+noClient.length+" entries senza tag cliente",details:ncList});
               }
