@@ -1589,7 +1589,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             {/* Current selection display + dropdown trigger */}
             <div style={{position:"relative"}}>
-              <button onClick={function(){setPpOpen(!ppOpen);}} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:10,border:"1px solid "+(ppOpen?"#7C5CFC":"#E8E7EC"),background:ppOpen?"rgba(124,92,252,0.04)":"#fff",cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+              <button onClick={function(e){e.stopPropagation();setPpOpen(!ppOpen);}} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:10,border:"1px solid "+(ppOpen?"#7C5CFC":"#E8E7EC"),background:ppOpen?"rgba(124,92,252,0.04)":"#fff",cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
                 <Calendar size={15} color={ppOpen?"#7C5CFC":"#8E8E93"} strokeWidth={2}/>
                 <span style={{fontSize:13,fontWeight:600,color:"#1C1B1F"}}>{pm==="all"?"Tutto il periodo":pLabel}</span>
                 <ChevronDown size={14} color="#8E8E93" style={{transition:"transform 0.2s",transform:ppOpen?"rotate(180deg)":"none"}}/>
