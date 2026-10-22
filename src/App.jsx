@@ -294,6 +294,9 @@ export default function App(){
   var toggleAl=function(name){setAlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _trEcon=useState(true),trEcon=_trEcon[0],setTrEcon=_trEcon[1];
   var _cmdSearch=useState(false),cmdSearch=_cmdSearch[0],setCmdSearch=_cmdSearch[1];
+  var _sbCollapsed=useState(function(){try{return localStorage.getItem("wl_sb_collapsed")==="1";}catch(e){return false;}}),sbCollapsed=_sbCollapsed[0],setSbCollapsed=_sbCollapsed[1];
+  var toggleSb=function(){setSbCollapsed(function(v){var nv=!v;try{localStorage.setItem("wl_sb_collapsed",nv?"1":"0");}catch(e){}return nv;});};
+  var sbW=sbCollapsed?64:220;
   var _cmdQ=useState(""),cmdQ=_cmdQ[0],setCmdQ=_cmdQ[1];
   var cmdRef=useRef(null);
 
@@ -1390,40 +1393,45 @@ export default function App(){
     <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",WebkitFontSmoothing:"antialiased",display:"flex"}}>
 
       {/* ═══ SIDEBAR ═══ */}
-      <aside style={{width:SB_W,background:"#fff",borderRight:"1px solid #E8E7EC",display:"flex",flexDirection:"column",padding:"20px 0",position:"fixed",top:0,left:0,bottom:0,zIndex:20,flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 20px",marginBottom:24}}>
-          <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><WillabLogo size={17}/></div>
-          <div><div style={{fontSize:15,fontWeight:800,color:"#1C1B1F",letterSpacing:"-0.02em"}}>Willab</div><div style={{fontSize:10,color:"#8E8E93",fontWeight:500}}>Analytics</div></div>
+      <aside style={{width:sbW,background:"#fff",borderRight:"1px solid #E8E7EC",display:"flex",flexDirection:"column",padding:"20px 0",position:"fixed",top:0,left:0,bottom:0,zIndex:20,flexShrink:0,transition:"width 0.2s ease",overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:sbCollapsed?"0 16px":"0 20px",marginBottom:24,minHeight:32}}>
+          <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}} onClick={toggleSb} title={sbCollapsed?"Espandi sidebar":"Comprimi sidebar"}><WillabLogo size={17}/></div>
+          {!sbCollapsed&&<div><div style={{fontSize:15,fontWeight:800,color:"#1C1B1F",letterSpacing:"-0.02em",whiteSpace:"nowrap"}}>Willab</div><div style={{fontSize:10,color:"#8E8E93",fontWeight:500,whiteSpace:"nowrap"}}>Analytics</div></div>}
         </div>
 
         {/* Search shortcut */}
-        <div onClick={function(){setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}} style={{margin:"0 12px 20px",padding:"8px 12px",borderRadius:9,border:"1px solid #E8E7EC",display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:"#A9A7B0",fontSize:12}}>
-          <Search size={14} strokeWidth={2}/> <span style={{flex:1}}>Cerca...</span> <span style={{fontSize:10,color:"#C7C7CC",fontWeight:600,background:"#F5F5F7",padding:"2px 6px",borderRadius:4}}>⌘K</span>
+        <div onClick={function(){setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}} style={{margin:sbCollapsed?"0 8px 20px":"0 12px 20px",padding:sbCollapsed?"8px":"8px 12px",borderRadius:9,border:"1px solid #E8E7EC",display:"flex",alignItems:"center",justifyContent:sbCollapsed?"center":"flex-start",gap:8,cursor:"pointer",color:"#A9A7B0",fontSize:12}} title="Cerca (⌘K)">
+          <Search size={14} strokeWidth={2} style={{flexShrink:0}}/> {!sbCollapsed&&<><span style={{flex:1}}>Cerca...</span><span style={{fontSize:10,color:"#C7C7CC",fontWeight:600,background:"#F5F5F7",padding:"2px 6px",borderRadius:4}}>⌘K</span></>}
         </div>
 
         {/* Nav sections */}
-        {navItems.map(function(sec){return (<div key={sec.section} style={{padding:"0 12px",marginBottom:20}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:"0.06em",padding:"0 8px",marginBottom:6}}>{sec.section}</div>
+        {navItems.map(function(sec){return (<div key={sec.section} style={{padding:sbCollapsed?"0 8px":"0 12px",marginBottom:20}}>
+          {!sbCollapsed&&<div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:"0.06em",padding:"0 8px",marginBottom:6}}>{sec.section}</div>}
+          {sbCollapsed&&<div style={{height:1,background:"#E8E7EC",margin:"0 8px 8px"}}/>}
           {sec.items.map(function(t){var Icon=t[0],key=t[1],label=t[2],badge=t[3];var isActive=tab===key;
-            return (<div key={key} onClick={function(){setTab(key);setSearch("");}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,fontSize:13,fontWeight:isActive?600:500,color:isActive?"#7C5CFC":"#6B6A70",background:isActive?"rgba(124,92,252,0.06)":"transparent",cursor:"pointer",marginBottom:2,transition:"all 0.15s"}}>
-              <Icon size={17} strokeWidth={isActive?2.2:1.8} style={{opacity:isActive?1:0.6}}/> <span style={{flex:1}}>{label}</span>
-              {badge&&<span style={{fontSize:10,fontWeight:600,background:isActive?"rgba(124,92,252,0.12)":"#F5F5F7",color:isActive?"#7C5CFC":"#8E8E93",padding:"2px 7px",borderRadius:6}}>{badge}</span>}
+            return (<div key={key} onClick={function(){setTab(key);setSearch("");}} title={sbCollapsed?label:""} style={{display:"flex",alignItems:"center",justifyContent:sbCollapsed?"center":"flex-start",gap:10,padding:sbCollapsed?"10px":"9px 12px",borderRadius:10,fontSize:13,fontWeight:isActive?600:500,color:isActive?"#7C5CFC":"#6B6A70",background:isActive?"rgba(124,92,252,0.06)":"transparent",cursor:"pointer",marginBottom:2,transition:"all 0.15s"}}>
+              <Icon size={17} strokeWidth={isActive?2.2:1.8} style={{opacity:isActive?1:0.6,flexShrink:0}}/> {!sbCollapsed&&<span style={{flex:1,whiteSpace:"nowrap"}}>{label}</span>}
+              {!sbCollapsed&&badge&&<span style={{fontSize:10,fontWeight:600,background:isActive?"rgba(124,92,252,0.12)":"#F5F5F7",color:isActive?"#7C5CFC":"#8E8E93",padding:"2px 7px",borderRadius:6}}>{badge}</span>}
             </div>);
           })}
         </div>);})}
 
-        <div style={{marginTop:"auto",padding:"0 20px"}}>
-          {syncSt!=="idle"&&<div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600,marginBottom:8}}>
+        <div style={{marginTop:"auto",padding:sbCollapsed?"0 8px":"0 20px"}}>
+          {syncSt!=="idle"&&<div style={{display:"flex",alignItems:"center",justifyContent:sbCollapsed?"center":"flex-start",gap:5,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600,marginBottom:8}}>
             {syncSt==="saving"&&<Loader size={12} strokeWidth={2} style={{animation:"spin 1s linear infinite"}}/>}
             {syncSt==="saved"&&<Check size={12} strokeWidth={2.5}/>}
-            {syncSt==="saving"?"Salvando...":"Salvato ✓"}
+            {!sbCollapsed&&(syncSt==="saving"?"Salvando...":"Salvato ✓")}
           </div>}
-          <div style={{fontSize:11,color:"#34C759",display:"flex",alignItems:"center",gap:5}}>● Sincronizzato</div>
+          <div style={{fontSize:11,color:"#34C759",display:"flex",alignItems:"center",justifyContent:sbCollapsed?"center":"flex-start",gap:5}}>●{!sbCollapsed&&" Sincronizzato"}</div>
+          {/* Collapse toggle */}
+          <div onClick={toggleSb} style={{marginTop:12,padding:"8px",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#8E8E93",border:"1px solid #E8E7EC",transition:"all 0.15s"}} title={sbCollapsed?"Espandi":"Comprimi"}>
+            {sbCollapsed?<ChevronRight size={14}/>:<ChevronLeft size={14}/>}
+          </div>
         </div>
       </aside>
 
       {/* ═══ MAIN ═══ */}
-      <div style={{flex:1,marginLeft:SB_W}}>
+      <div style={{flex:1,marginLeft:sbW,transition:"margin-left 0.2s ease"}}>
 
         {/* Header */}
         <div style={{padding:"24px 36px 18px",background:"#fff",borderBottom:"1px solid #E8E7EC"}}>
