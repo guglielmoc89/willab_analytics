@@ -93,8 +93,9 @@ var AC={"Video":"#FF9500","Graphic Design":"#AF52DE","Social Media":"#007AFF","W
 var CC=["#7C5CFC","#007AFF","#34C759","#FF9500","#AF52DE","#34C759","#FB923C","#FF3B30","#5856D6","#8E8E93","#FF2D55","#5AC8FA"];
 var gac=function(a){return AC[a]||C.ac;};
 var gcc=function(i){return CC[i%CC.length];};
-var bx={background:C.sf,borderRadius:16,border:"1px solid "+C.bdL,padding:"20px 22px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"};
+var bx={background:C.sf,borderRadius:14,border:"1px solid "+C.bdL,padding:"20px 22px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"};
 var ix={background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+var SB_W=220;
 
 function Bar(props){
   var w=props.max>0?Math.min(props.value/props.max*100,100):0;
@@ -292,6 +293,19 @@ export default function App(){
   var _alOpen=useState({}),alOpen=_alOpen[0],setAlOpen=_alOpen[1];
   var toggleAl=function(name){setAlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _trEcon=useState(true),trEcon=_trEcon[0],setTrEcon=_trEcon[1];
+  var _cmdSearch=useState(false),cmdSearch=_cmdSearch[0],setCmdSearch=_cmdSearch[1];
+  var _cmdQ=useState(""),cmdQ=_cmdQ[0],setCmdQ=_cmdQ[1];
+  var cmdRef=useRef(null);
+
+  // ⌘K shortcut
+  useEffect(function(){
+    var handler=function(e){
+      if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}
+      if(e.key==="Escape")setCmdSearch(false);
+    };
+    window.addEventListener("keydown",handler);
+    return function(){window.removeEventListener("keydown",handler);};
+  },[]);
   var _mmLoading=useState(false),mmLoading=_mmLoading[0],setMmLoading=_mmLoading[1];
   var _mmStatus=useState(""),mmStatus=_mmStatus[0],setMmStatus=_mmStatus[1];
   var mmMap=cfg._mmMap||{};
@@ -1365,56 +1379,93 @@ export default function App(){
 
   var extCL=CL.filter(function(c){return !c.isI;});
 
+  var tabLabels={overview:"Overview",areas:"Aree",clients:"Clienti",profitability:"Marginalità",team:"Team",multimedia:"Multimedia",insight:"Insight",extras:"Costi Extra",config:"Config"};
+  var navItems=[
+    {section:"Analisi",items:[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti",CL.length],[PieChart,"profitability","Marginalità"],[Users,"team","Team",PL.length],[Camera,"multimedia","Multimedia"]]},
+    {section:"Gestione",items:[[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]]}
+  ];
+  var breadcrumb="Willab Analytics › "+(tabLabels[tab]||"Overview");
+
   return (
-    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",WebkitFontSmoothing:"antialiased"}}>
-      {/* Header */}
-      <div style={{background:"rgba(255,255,255,0.72)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:"1px solid "+C.bdL,padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><WillabLogo size={16}/></div>
-          <span style={{fontSize:15,fontWeight:700,letterSpacing:"-.01em"}}>Willab Analytics</span>
-          <span style={{fontSize:12,color:C.td,marginLeft:4}}>{fn}</span>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",WebkitFontSmoothing:"antialiased",display:"flex"}}>
+
+      {/* ═══ SIDEBAR ═══ */}
+      <aside style={{width:SB_W,background:"#fff",borderRight:"1px solid #E8E7EC",display:"flex",flexDirection:"column",padding:"20px 0",position:"fixed",top:0,left:0,bottom:0,zIndex:20,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 20px",marginBottom:24}}>
+          <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><WillabLogo size={17}/></div>
+          <div><div style={{fontSize:15,fontWeight:800,color:"#1C1B1F",letterSpacing:"-0.02em"}}>Willab</div><div style={{fontSize:10,color:"#8E8E93",fontWeight:500}}>Analytics</div></div>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={generateReport} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><FileText size={14} strokeWidth={2}/> Report</button>
-          <button onClick={exportExcel} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Download size={14} strokeWidth={2}/> Excel</button>
-          <button onClick={function(){if(window.confirm("Vuoi caricare un nuovo CSV? I costi e le fee restano salvati.")){clearCSVLocal();sbSaveNow({csv_text:null,csv_name:null});setView("upload");setAllRec([]);}}} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13} strokeWidth={2}/> Nuovo</button>
-          <button onClick={function(){fr.current&&fr.current.click();}} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ac,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={14} strokeWidth={2}/> CSV</button>
-          <input ref={fr} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={handleFile}/>
-          {syncSt!=="idle"&&<span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600}}>
+
+        {/* Search shortcut */}
+        <div onClick={function(){setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}} style={{margin:"0 12px 20px",padding:"8px 12px",borderRadius:9,border:"1px solid #E8E7EC",display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:"#A9A7B0",fontSize:12}}>
+          <Search size={14} strokeWidth={2}/> <span style={{flex:1}}>Cerca...</span> <span style={{fontSize:10,color:"#C7C7CC",fontWeight:600,background:"#F5F5F7",padding:"2px 6px",borderRadius:4}}>⌘K</span>
+        </div>
+
+        {/* Nav sections */}
+        {navItems.map(function(sec){return (<div key={sec.section} style={{padding:"0 12px",marginBottom:20}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:"0.06em",padding:"0 8px",marginBottom:6}}>{sec.section}</div>
+          {sec.items.map(function(t){var Icon=t[0],key=t[1],label=t[2],badge=t[3];var isActive=tab===key;
+            return (<div key={key} onClick={function(){setTab(key);setSearch("");}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,fontSize:13,fontWeight:isActive?600:500,color:isActive?"#7C5CFC":"#6B6A70",background:isActive?"rgba(124,92,252,0.06)":"transparent",cursor:"pointer",marginBottom:2,transition:"all 0.15s"}}>
+              <Icon size={17} strokeWidth={isActive?2.2:1.8} style={{opacity:isActive?1:0.6}}/> <span style={{flex:1}}>{label}</span>
+              {badge&&<span style={{fontSize:10,fontWeight:600,background:isActive?"rgba(124,92,252,0.12)":"#F5F5F7",color:isActive?"#7C5CFC":"#8E8E93",padding:"2px 7px",borderRadius:6}}>{badge}</span>}
+            </div>);
+          })}
+        </div>);})}
+
+        <div style={{marginTop:"auto",padding:"0 20px"}}>
+          {syncSt!=="idle"&&<div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600,marginBottom:8}}>
             {syncSt==="saving"&&<Loader size={12} strokeWidth={2} style={{animation:"spin 1s linear infinite"}}/>}
             {syncSt==="saved"&&<Check size={12} strokeWidth={2.5}/>}
             {syncSt==="saving"?"Salvando...":"Salvato ✓"}
-          </span>}
+          </div>}
+          <div style={{fontSize:11,color:"#34C759",display:"flex",alignItems:"center",gap:5}}>● Sincronizzato</div>
         </div>
-      </div>
+      </aside>
 
-      <div style={{maxWidth:1120,margin:"0 auto",padding:"20px 24px"}}>
-        {/* Period */}
-        <div style={{...bx,padding:"12px 18px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-          <div style={{display:"flex",gap:3}}>
-            {["week","month","quarter","all"].map(function(k){return (<Pill key={k} sm on={pm===k} onClick={function(){setPm(k);if(k==="all")setPi(0);else{var kf=k==="week"?function(r){return getWK(r.date);}:k==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};var ks=Array.from(new Set(allRec.map(kf))).sort();setPi(ks.length-1);}}}>{k==="week"?"Settimana":k==="month"?"Mese":k==="quarter"?"Trimestre":"Tutto"}</Pill>);})}
-          </div>
-          {pm!=="all"&&(
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <button onClick={function(){if(canP)setPi(function(i){return i-1;});}} style={{background:"transparent",border:"1px solid "+(canP?C.bd:C.bdL),borderRadius:7,padding:"3px 8px",color:canP?C.ts:C.td,cursor:canP?"pointer":"default",display:"flex",alignItems:"center"}}><ChevronLeft size={16}/></button>
-              <span style={{fontSize:14,fontWeight:700,minWidth:140,textAlign:"center"}}>{pLabel}</span>
-              <button onClick={function(){if(canN)setPi(function(i){return i+1;});}} style={{background:"transparent",border:"1px solid "+(canN?C.bd:C.bdL),borderRadius:7,padding:"3px 8px",color:canN?C.ts:C.td,cursor:canN?"pointer":"default",display:"flex",alignItems:"center"}}><ChevronRight size={16}/></button>
+      {/* ═══ MAIN ═══ */}
+      <div style={{flex:1,marginLeft:SB_W}}>
+
+        {/* Header */}
+        <div style={{padding:"24px 36px 18px",background:"#fff",borderBottom:"1px solid #E8E7EC"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+            <div>
+              <div style={{fontSize:12,color:"#8E8E93",fontWeight:500,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:4}}>{new Date().toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+              <div style={{fontSize:26,fontWeight:800,color:"#1C1B1F",letterSpacing:"-0.03em"}}>Ciao Guglielmo</div>
+              <div style={{fontSize:12,color:"#A9A7B0",marginTop:3}}>{breadcrumb}</div>
             </div>
-          )}
-          <span style={{fontSize:11,color:C.tm}}>{records.length} entries{!hasC&&<span style={{color:C.am,marginLeft:6}}>⚠ Imposta costi</span>}</span>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={generateReport} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"1px solid #E8E7EC",background:"#fff",color:"#6B6A70",cursor:"pointer",fontFamily:"inherit"}}><FileText size={14}/> Report</button>
+              <button onClick={exportExcel} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"1px solid #E8E7EC",background:"#fff",color:"#6B6A70",cursor:"pointer",fontFamily:"inherit"}}><Download size={14}/> Excel</button>
+              <button onClick={function(){fr.current&&fr.current.click();}} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"1px solid #7C5CFC",background:"#7C5CFC",color:"#fff",cursor:"pointer",fontFamily:"inherit"}}><Plus size={14}/> CSV</button>
+              <input ref={fr} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={handleFile}/>
+            </div>
+          </div>
+
+          {/* Period selector */}
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <div style={{display:"flex",gap:0,background:"#F5F5F7",borderRadius:10,padding:3}}>
+              {["week","month","quarter","all"].map(function(k){var isOn=pm===k;return (<button key={k} onClick={function(){setPm(k);if(k==="all")setPi(0);else{var kf=k==="week"?function(r){return getWK(r.date);}:k==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};var ks=Array.from(new Set(allRec.map(kf))).sort();setPi(ks.length-1);}}} style={{padding:"7px 16px",borderRadius:8,fontSize:12,fontWeight:600,border:"none",background:isOn?"#fff":"transparent",color:isOn?"#1C1B1F":"#8E8E93",cursor:"pointer",fontFamily:"inherit",boxShadow:isOn?"0 1px 3px rgba(0,0,0,0.06)":"none",transition:"all .15s"}}>{k==="week"?"Settimana":k==="month"?"Mese":k==="quarter"?"Trimestre":"Tutto"}</button>);})}
+            </div>
+            {pm!=="all"&&(
+              <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:"auto"}}>
+                <button onClick={function(){if(canP)setPi(function(i){return i-1;});}} style={{width:30,height:30,borderRadius:8,border:"1px solid #E8E7EC",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:canP?"pointer":"default",color:canP?"#6B6A70":"#D5D4DA"}}><ChevronLeft size={16}/></button>
+                <span style={{fontSize:14,fontWeight:700,minWidth:140,textAlign:"center"}}>{pLabel}</span>
+                <button onClick={function(){if(canN)setPi(function(i){return i+1;});}} style={{width:30,height:30,borderRadius:8,border:"1px solid #E8E7EC",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:canN?"pointer":"default",color:canN?"#6B6A70":"#D5D4DA"}}><ChevronRight size={16}/></button>
+              </div>
+            )}
+            <span style={{fontSize:11,color:"#8E8E93",marginLeft:"auto"}}>{records.length} entries{!hasC&&<span style={{color:C.am,marginLeft:6}}>⚠ Imposta costi</span>}</span>
+          </div>
         </div>
+
+        {/* Content */}
+        <div style={{padding:"28px 36px"}}>
 
         {/* KPIs */}
-        <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:18}}>
-          <KPI icon={Clock} label="Ore totali" value={fmtH(tH)} sub={PL.length+" persone"} color={C.bl} bg={C.blBg} info="Somma di tutte le ore tracciate nel periodo selezionato, incluse ore interne."/>
-          <KPI icon={DollarSign} label="Costi totali" value={fmt(tC)} sub={tH>0?fmt(tC/tH)+"/h":"—"} color={C.am} bg={C.amBg} info="Somma di costi team (ore x rate) + costi persone fisso + costi extra."/>
-          <KPI icon={Home} label="Ore interne" value={fmtH(iH)} sub={fmt(iC)} color={C.sl} bg="rgba(142,142,147,0.06)" info="Ore taggate [willab] senza fee associata (riunioni, admin, formazione)."/>
-          <KPI icon={TrendingUp} label="Margine" value={fmt(tM)} sub={tF>0?(tM>=0?"+":"")+pct(mPct):"Imposta fee →"} color={tM>=0?C.gn:C.rd} bg={tM>=0?C.gnBg:C.rdBg} info="Margine = Fee clienti - Costi totali team. La % indica il margine sui ricavi."/>
-        </div>
-
-        {/* Tabs */}
-        <div style={{display:"flex",gap:2,marginBottom:18,background:C.sf,borderRadius:13,padding:3,border:"1px solid "+C.bdL,width:"fit-content"}}>
-          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[Camera,"multimedia","Multimedia"],[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.bl}}/>Ore totali</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em"}}>{fmtH(tH)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{PL.length+" persone · "+records.length+" entries"}</div></div>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.am}}/>Costi totali</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em"}}>{fmt(tC)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{tH>0?fmt(tC/tH)+"/h media":"—"}</div></div>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.gn}}/>Fee totali</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em"}}>{fmt(tF)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{extCL.length+" clienti attivi"}</div></div>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.ac}}/>Margine</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",color:tM>=0?C.gn:C.rd}}>{fmt(tM)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{tF>0?(tM>=0?"+":"")+pct(mPct)+" sui ricavi":"Imposta fee →"}</div></div>
         </div>
 
         {/* SEARCH BAR + SORT - shown on clients, people, areas, team */}
@@ -2708,16 +2759,53 @@ export default function App(){
           </div>
         )}
 
-        <div style={{textAlign:"center",padding:"30px 0 14px",color:C.td,fontSize:10}}>Willab Analytics</div>
+        </div>{/* end content padding */}
+      </div>{/* end main */}
 
-        {/* UNDO TOAST */}
-        {undoData&&(
-          <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1C1B1F",color:"#fff",borderRadius:12,padding:"12px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 24px rgba(0,0,0,0.3)",zIndex:999,fontSize:13,fontWeight:600}}>
-            <span>{undoData.label}</span>
-            <button onClick={doUndo} style={{background:"#7C5CFC",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Annulla</button>
+      {/* ═══ CMD+K SEARCH MODAL ═══ */}
+      {cmdSearch&&(
+        <div onClick={function(){setCmdSearch(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(4px)",zIndex:100,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"15vh"}}>
+          <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.2)",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 20px",borderBottom:"1px solid #E8E7EC"}}>
+              <Search size={18} color="#8E8E93" strokeWidth={2}/>
+              <input ref={cmdRef} type="text" value={cmdQ} onChange={function(e){setCmdQ(e.target.value);}} placeholder="Cerca clienti, persone, aree..." style={{flex:1,border:"none",outline:"none",fontSize:15,fontWeight:500,color:"#1C1B1F",fontFamily:"inherit"}}/>
+              <span style={{fontSize:10,color:"#C7C7CC",fontWeight:600,background:"#F5F5F7",padding:"3px 8px",borderRadius:5}}>ESC</span>
+            </div>
+            <div style={{maxHeight:320,overflowY:"auto",padding:"8px"}}>
+              {(function(){
+                var q=cmdQ.toLowerCase().trim();
+                if(!q)return (<div style={{padding:"20px",textAlign:"center",color:"#8E8E93",fontSize:13}}>Digita per cercare...</div>);
+                var results=[];
+                // Search clients
+                CL.forEach(function(c){if(c.name.toLowerCase().indexOf(q)>=0)results.push({type:"cliente",name:c.name,sub:fmtH(c.hours),tab:"clients"});});
+                // Search people
+                PL.forEach(function(p){if(p.name.toLowerCase().indexOf(q)>=0)results.push({type:"persona",name:p.name,sub:fmtH(p.hours),tab:"team"});});
+                // Search areas
+                AL.forEach(function(a){if(a.name.toLowerCase().indexOf(q)>=0)results.push({type:"area",name:a.name,sub:fmtH(a.hours),tab:"areas"});});
+                // Search tabs
+                Object.keys(tabLabels).forEach(function(k){if(tabLabels[k].toLowerCase().indexOf(q)>=0)results.push({type:"tab",name:tabLabels[k],sub:"Vai alla sezione",tab:k});});
+                if(results.length===0)return (<div style={{padding:"20px",textAlign:"center",color:"#8E8E93",fontSize:13}}>Nessun risultato</div>);
+                var typeIcons={cliente:"🏷️",persona:"👤",area:"📁",tab:"📊"};
+                return results.slice(0,10).map(function(r,i){
+                  return (<div key={i} onClick={function(){setTab(r.tab);setSearch(r.type!=="tab"?r.name:"");setCmdSearch(false);}} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:10,cursor:"pointer",transition:"background 0.1s"}} onMouseEnter={function(e){e.currentTarget.style.background="#F5F5F7";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:16}}>{typeIcons[r.type]}</span>
+                    <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,textTransform:"capitalize"}}>{r.name}</div><div style={{fontSize:11,color:"#8E8E93"}}>{r.type}</div></div>
+                    <span style={{fontSize:12,color:"#8E8E93",fontWeight:500}}>{r.sub}</span>
+                  </div>);
+                });
+              })()}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* UNDO TOAST */}
+      {undoData&&(
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1C1B1F",color:"#fff",borderRadius:12,padding:"12px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 24px rgba(0,0,0,0.3)",zIndex:999,fontSize:13,fontWeight:600}}>
+          <span>{undoData.label}</span>
+          <button onClick={doUndo} style={{background:"#7C5CFC",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Annulla</button>
+        </div>
+      )}
     </div>
   );
 }
