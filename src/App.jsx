@@ -297,17 +297,20 @@ export default function App(){
   var _sbCollapsed=useState(function(){try{return localStorage.getItem("wl_sb_collapsed")==="1";}catch(e){return false;}}),sbCollapsed=_sbCollapsed[0],setSbCollapsed=_sbCollapsed[1];
   var toggleSb=function(){setSbCollapsed(function(v){var nv=!v;try{localStorage.setItem("wl_sb_collapsed",nv?"1":"0");}catch(e){}return nv;});};
   var sbW=sbCollapsed?64:220;
+  var _ppOpen=useState(false),ppOpen=_ppOpen[0],setPpOpen=_ppOpen[1];
   var _cmdQ=useState(""),cmdQ=_cmdQ[0],setCmdQ=_cmdQ[1];
   var cmdRef=useRef(null);
 
-  // ⌘K shortcut
+  // ⌘K shortcut + close period picker on outside click
   useEffect(function(){
     var handler=function(e){
       if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}
-      if(e.key==="Escape")setCmdSearch(false);
+      if(e.key==="Escape"){setCmdSearch(false);setPpOpen(false);}
     };
+    var clickHandler=function(){setPpOpen(false);};
     window.addEventListener("keydown",handler);
-    return function(){window.removeEventListener("keydown",handler);};
+    window.addEventListener("click",clickHandler);
+    return function(){window.removeEventListener("keydown",handler);window.removeEventListener("click",clickHandler);};
   },[]);
   var _mmLoading=useState(false),mmLoading=_mmLoading[0],setMmLoading=_mmLoading[1];
   var _mmStatus=useState(""),mmStatus=_mmStatus[0],setMmStatus=_mmStatus[1];
@@ -1582,18 +1585,105 @@ export default function App(){
             </div>
           </div>
 
-          {/* Period selector */}
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{display:"flex",gap:0,background:"#F5F5F7",borderRadius:10,padding:3}}>
-              {["week","month","quarter","all"].map(function(k){var isOn=pm===k;return (<button key={k} onClick={function(){setPm(k);if(k==="all")setPi(0);else{var kf=k==="week"?function(r){return getWK(r.date);}:k==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};var ks=Array.from(new Set(allRec.map(kf))).sort();setPi(ks.length-1);}}} style={{padding:"7px 16px",borderRadius:8,fontSize:12,fontWeight:600,border:"none",background:isOn?"#fff":"transparent",color:isOn?"#1C1B1F":"#8E8E93",cursor:"pointer",fontFamily:"inherit",boxShadow:isOn?"0 1px 3px rgba(0,0,0,0.06)":"none",transition:"all .15s"}}>{k==="week"?"Settimana":k==="month"?"Mese":k==="quarter"?"Trimestre":"Tutto"}</button>);})}
+          {/* Period selector — unified date range picker */}
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            {/* Current selection display + dropdown trigger */}
+            <div style={{position:"relative"}}>
+              <button onClick={function(){setPpOpen(!ppOpen);}} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:10,border:"1px solid "+(ppOpen?"#7C5CFC":"#E8E7EC"),background:ppOpen?"rgba(124,92,252,0.04)":"#fff",cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+                <Calendar size={15} color={ppOpen?"#7C5CFC":"#8E8E93"} strokeWidth={2}/>
+                <span style={{fontSize:13,fontWeight:600,color:"#1C1B1F"}}>{pm==="all"?"Tutto il periodo":pLabel}</span>
+                <ChevronDown size={14} color="#8E8E93" style={{transition:"transform 0.2s",transform:ppOpen?"rotate(180deg)":"none"}}/>
+              </button>
+
+              {/* Dropdown */}
+              {ppOpen&&(<div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#fff",borderRadius:14,border:"1px solid #E8E7EC",boxShadow:"0 12px 40px rgba(0,0,0,0.12)",padding:16,zIndex:50,width:320}} onClick={function(e){e.stopPropagation();}}>
+                {/* Presets */}
+                <div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Preset rapidi</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
+                  {(function(){
+                    var now=new Date();var curMonth=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+                    var lastMonth=new Date(now.getFullYear(),now.getMonth()-1,1);var lm=lastMonth.getFullYear()+"-"+String(lastMonth.getMonth()+1).padStart(2,"0");
+                    var q=Math.ceil((now.getMonth()+1)/3);
+                    var presets=[
+                      {label:"Questo mese",mode:"month",target:curMonth},
+                      {label:"Mese scorso",mode:"month",target:lm},
+                      {label:"Q1 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q1"},
+                      {label:"Q2 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q2"},
+                      {label:"Q3 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q3"},
+                      {label:"Q4 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q4"},
+                      {label:"YTD "+now.getFullYear(),mode:"all",target:"all"},
+                      {label:"Tutto",mode:"all",target:"all"},
+                    ];
+                    return presets.map(function(pr){
+                      var isActive=(pr.mode==="all"&&pm==="all")||(pr.mode===pm&&pr.target===cp);
+                      return (<button key={pr.label} onClick={function(){
+                        if(pr.mode==="all"){setPm("all");setPi(0);}
+                        else{
+                          setPm(pr.mode);
+                          var kf=pr.mode==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};
+                          var ks=Array.from(new Set(allRec.map(kf))).sort();
+                          var idx=ks.indexOf(pr.target);
+                          if(idx>=0)setPi(idx);else setPi(ks.length-1);
+                        }
+                        setPpOpen(false);
+                      }} style={{padding:"6px 12px",borderRadius:8,fontSize:11,fontWeight:600,border:"1px solid "+(isActive?"#7C5CFC":"#E8E7EC"),background:isActive?"rgba(124,92,252,0.08)":"#fff",color:isActive?"#7C5CFC":"#6B6A70",cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>{pr.label}</button>);
+                    });
+                  })()}
+                </div>
+
+                {/* Month grid */}
+                <div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Seleziona mese</div>
+                {(function(){
+                  var years=Array.from(new Set(allMonths.map(function(mk){return mk.split("-")[0];}))).sort();
+                  return years.map(function(year){
+                    return (<div key={year} style={{marginBottom:10}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1C1B1F",marginBottom:6}}>{year}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:4}}>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(function(m){
+                          var mk=year+"-"+String(m).padStart(2,"0");
+                          var hasData=allMonths.indexOf(mk)>=0;
+                          var isActive=pm==="month"&&cp===mk;
+                          var mNames=["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+                          return (<button key={mk} disabled={!hasData} onClick={function(){
+                            setPm("month");
+                            var ks=Array.from(new Set(allRec.map(function(r){return getMK(r.date);}))).sort();
+                            var idx=ks.indexOf(mk);if(idx>=0)setPi(idx);
+                            setPpOpen(false);
+                          }} style={{padding:"6px 0",borderRadius:6,fontSize:10,fontWeight:isActive?700:500,border:"none",background:isActive?"#7C5CFC":hasData?"#F5F5F7":"transparent",color:isActive?"#fff":hasData?"#1C1B1F":"#D5D4DA",cursor:hasData?"pointer":"default",fontFamily:"inherit",transition:"all .1s"}}>{mNames[m-1]}</button>);
+                        })}
+                      </div>
+                    </div>);
+                  });
+                })()}
+
+                {/* Quarter quick select */}
+                <div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8,marginTop:6}}>Trimestre</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+                  {(function(){
+                    var qks=Array.from(new Set(allRec.map(function(r){return getQK(r.date);}))).sort();
+                    return qks.map(function(qk){
+                      var isActive=pm==="quarter"&&cp===qk;
+                      var parts=qk.split("-");
+                      return (<button key={qk} onClick={function(){
+                        setPm("quarter");
+                        var ks=Array.from(new Set(allRec.map(function(r){return getQK(r.date);}))).sort();
+                        var idx=ks.indexOf(qk);if(idx>=0)setPi(idx);
+                        setPpOpen(false);
+                      }} style={{padding:"7px 0",borderRadius:6,fontSize:11,fontWeight:isActive?700:500,border:"none",background:isActive?"#7C5CFC":"#F5F5F7",color:isActive?"#fff":"#1C1B1F",cursor:"pointer",fontFamily:"inherit"}}>{parts[1]+" "+parts[0].slice(2)}</button>);
+                    });
+                  })()}
+                </div>
+              </div>)}
             </div>
+
+            {/* Prev/Next navigation */}
             {pm!=="all"&&(
-              <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:"auto"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <button onClick={function(){if(canP)setPi(function(i){return i-1;});}} style={{width:30,height:30,borderRadius:8,border:"1px solid #E8E7EC",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:canP?"pointer":"default",color:canP?"#6B6A70":"#D5D4DA"}}><ChevronLeft size={16}/></button>
-                <span style={{fontSize:14,fontWeight:700,minWidth:140,textAlign:"center"}}>{pLabel}</span>
                 <button onClick={function(){if(canN)setPi(function(i){return i+1;});}} style={{width:30,height:30,borderRadius:8,border:"1px solid #E8E7EC",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:canN?"pointer":"default",color:canN?"#6B6A70":"#D5D4DA"}}><ChevronRight size={16}/></button>
               </div>
             )}
+
             <span style={{fontSize:11,color:"#8E8E93",marginLeft:"auto"}}>{records.length} entries{!hasC&&<span style={{color:C.am,marginLeft:6}}>⚠ Imposta costi</span>}</span>
           </div>
         </div>
