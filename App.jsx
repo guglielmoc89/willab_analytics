@@ -82,8 +82,9 @@ function mapRecords(rows){
     var startHour=date?date.getHours():-1;
     var weekday=date?date.getDay():-1;
     var task=r["Task Name"]||"";
+    var taskId=r["Task ID"]||"";
     var hasDesc=(r["Description"]||"").trim().length>0;
-    return {user:user,space:space,area:area,client:client,hours:hours,date:date,startHour:startHour,weekday:weekday,task:task,hasDesc:hasDesc};
+    return {user:user,space:space,area:area,client:client,hours:hours,date:date,startHour:startHour,weekday:weekday,task:task,taskId:taskId,hasDesc:hasDesc};
   }).filter(function(r){return r.hours>0&&r.user&&r.date;});
 }
 
@@ -92,8 +93,9 @@ var AC={"Video":"#FF9500","Graphic Design":"#AF52DE","Social Media":"#007AFF","W
 var CC=["#7C5CFC","#007AFF","#34C759","#FF9500","#AF52DE","#34C759","#FB923C","#FF3B30","#5856D6","#8E8E93","#FF2D55","#5AC8FA"];
 var gac=function(a){return AC[a]||C.ac;};
 var gcc=function(i){return CC[i%CC.length];};
-var bx={background:C.sf,borderRadius:16,border:"1px solid "+C.bdL,padding:"20px 22px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"};
+var bx={background:C.sf,borderRadius:14,border:"1px solid "+C.bdL,padding:"20px 22px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"};
 var ix={background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+var SB_W=220;
 
 function Bar(props){
   var w=props.max>0?Math.min(props.value/props.max*100,100):0;
@@ -149,6 +151,8 @@ function Accordion(props){
     {props.open&&<div style={{padding:"0 20px 20px"}}>{props.children}</div>}
   </div>);
 }
+
+var WillabLogo=function(props){var s=props.size||20;return (<svg width={s} height={s*1.12} viewBox="0 0 407.46 455.81" xmlns="http://www.w3.org/2000/svg"><path fill={props.color||"#fff"} d="M384.14,97.37L225.9,6.02c-14.14-8.03-31.34-8.03-45.1,0L22.55,97.37C8.41,105.4,0,120.31,0,136.74v183.09c0,16.05,8.79,30.96,22.55,39.37,69.57,40.13,17.2,9.94,113.14,65.36v-156.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v25.99l-45.1-25.99v-182.71L203.73,46.15l158.24,91.35v182.71l-45.1,25.99v-182.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v209.08c96.7-55.81,43.96-25.23,113.14-65.36,14.14-8.03,22.55-22.93,22.55-39.37v-183.09c0-16.05-8.79-30.96-22.55-39.37M180.41,267.08c0-16.05,8.79-30.96,22.55-39.37l22.55-13v235.07c-14.14,8.03-31.34,8.03-45.1,0v-183.09.38Z"/></svg>);};
 
 export default function App(){
   var _s=useState("upload"),view=_s[0],setView=_s[1];
@@ -273,7 +277,7 @@ export default function App(){
   var _cm=useState(""),cfgM=_cm[0],setCfgM=_cm[1];
   var _po=useState({clients:true,areas:false,people:false,trend:false}),profOpen=_po[0],setProfOpen=_po[1];
   var toggleProf=function(k){setProfOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
-  var _co=useState({internal:false,costs:true,fees:true,extras:false,budgets:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
+  var _co=useState({internal:false,costs:true,fees:true,extras:false,budgets:false,multimedia:false}),cfgOpen=_co[0],setCfgOpen=_co[1];
   var toggleCfg=function(k){setCfgOpen(function(prev){var n=Object.assign({},prev);n[k]=!n[k];return n;});};
   var _sync=useState("idle"),syncSt=_sync[0],setSyncSt=_sync[1];
   var _search=useState(""),search=_search[0],setSearch=_search[1];
@@ -289,6 +293,111 @@ export default function App(){
   var _alOpen=useState({}),alOpen=_alOpen[0],setAlOpen=_alOpen[1];
   var toggleAl=function(name){setAlOpen(function(prev){var n=Object.assign({},prev);n[name]=!n[name];return n;});};
   var _trEcon=useState(true),trEcon=_trEcon[0],setTrEcon=_trEcon[1];
+  var _cmdSearch=useState(false),cmdSearch=_cmdSearch[0],setCmdSearch=_cmdSearch[1];
+  var _cmdQ=useState(""),cmdQ=_cmdQ[0],setCmdQ=_cmdQ[1];
+  var cmdRef=useRef(null);
+
+  // ⌘K shortcut
+  useEffect(function(){
+    var handler=function(e){
+      if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}
+      if(e.key==="Escape")setCmdSearch(false);
+    };
+    window.addEventListener("keydown",handler);
+    return function(){window.removeEventListener("keydown",handler);};
+  },[]);
+  var _mmLoading=useState(false),mmLoading=_mmLoading[0],setMmLoading=_mmLoading[1];
+  var _mmStatus=useState(""),mmStatus=_mmStatus[0],setMmStatus=_mmStatus[1];
+  var mmMap=cfg._mmMap||{};
+
+  var MM_LIST_ID="901500178548"; // Multimedia list ID
+
+  var updateMmMapping=function(token){
+    if(!token){alert("Inserisci il token API di ClickUp");return;}
+    setMmLoading(true);setMmStatus("Scaricando task root...");
+    var hdrs={"Authorization":token,"Content-Type":"application/json"};
+    var newMap={};
+
+    // Step 1: Get all tasks in Multimedia list (page 0, then paginate)
+    var allTasks=[];
+    var fetchTasks=function(page){
+      fetch("https://api.clickup.com/api/v2/list/"+MM_LIST_ID+"/task?archived=false&subtasks=true&include_closed=true&page="+page,{headers:hdrs})
+      .then(function(r){if(!r.ok)throw new Error("API error: "+r.status);return r.json();})
+      .then(function(json){
+        var tasks=json.tasks||[];
+        allTasks=allTasks.concat(tasks);
+        if(tasks.length>=100){fetchTasks(page+1);}
+        else{processTasks();}
+      })
+      .catch(function(err){setMmStatus("Errore: "+err.message);setMmLoading(false);});
+    };
+
+    var processTasks=function(){
+      setMmStatus("Trovati "+allTasks.length+" task. Cercando contenitori...");
+      // Find containers: subtasks of root tasks that have "Editing"/"Riprese"/"Trasferte" in name
+      var containerIds=[];
+      allTasks.forEach(function(t){
+        var tl=(t.name||"").toLowerCase();
+        var cat=null;
+        if(tl.match(/^riprese\b/)||tl.match(/riprese video/)||tl.match(/riprese foto/))cat="Riprese";
+        else if(tl.match(/^editing\b/)||tl.match(/editing video/)||tl.match(/editing foto/))cat="Editing";
+        else if(tl.match(/^trasferte?\b/)||tl.match(/trasferte? video/)||tl.match(/trasferte? foto/))cat="Trasferta";
+        if(cat){
+          newMap[t.id]=cat;
+          containerIds.push({id:t.id,cat:cat,name:t.name});
+        }
+      });
+      setMmStatus("Trovati "+containerIds.length+" contenitori. Scaricando sotto-subtask...");
+
+      // Step 2: For each container, get its subtasks recursively
+      var done=0;
+      if(containerIds.length===0){finishMapping();}
+
+      var fetchChildren=function(parentId,cat,depth){
+        fetch("https://api.clickup.com/api/v2/task/"+parentId+"?include_subtasks=true",{headers:hdrs})
+        .then(function(r){return r.json();})
+        .then(function(task){
+          var subs=task.subtasks||[];
+          subs.forEach(function(s){
+            newMap[s.id]=cat;
+            // If this subtask also has children, recurse (max depth 3)
+            if(s.subtasks_count&&s.subtasks_count>0&&depth<3){
+              fetchChildren(s.id,cat,depth+1);
+            }
+          });
+          done++;
+          setMmStatus("Processati "+done+"/"+containerIds.length+" contenitori ("+Object.keys(newMap).length+" task mappati)...");
+          if(done>=containerIds.length){
+            // Wait a bit for any recursive calls
+            setTimeout(finishMapping,1000);
+          }
+        })
+        .catch(function(){done++;if(done>=containerIds.length)setTimeout(finishMapping,1000);});
+      };
+
+      containerIds.forEach(function(c){
+        fetchChildren(c.id,c.cat,0);
+      });
+    };
+
+    var finishMapping=function(){
+      setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));n._mmMap=newMap;return n;});
+      setMmStatus("Mapping completato: "+Object.keys(newMap).length+" task mappati!");
+      setMmLoading(false);
+    };
+
+    fetchTasks(0);
+  };
+
+  var getMmCat=function(taskId,taskName){
+    if(mmMap[taskId])return mmMap[taskId];
+    // Keyword fallback
+    var tl=(taskName||"").toLowerCase();
+    if(tl.match(/^riprese\b/)||tl.match(/riprese video/)||tl.match(/riprese foto/)||tl.indexOf("shooting")>=0||tl.indexOf("sopralluogo")>=0)return "Riprese";
+    if(tl.match(/^editing\b/)||tl.match(/editing video/)||tl.match(/editing foto/)||tl.indexOf("montaggio")>=0||tl.indexOf("post produzione")>=0||tl.indexOf("post-produzione")>=0)return "Editing";
+    if(tl.match(/^trasferte?\b/)||tl.match(/trasferte? video/)||tl.match(/trasferte? foto/)||tl.indexOf("trasferta")>=0)return "Trasferta";
+    return "Contenuti";
+  };
   var undoTimer=useRef(null);
   var fr=useRef(null);
 
@@ -353,12 +462,15 @@ export default function App(){
   };
   var gfMonthly=function(c,m){
     var raw=gfRaw(c,m);var n=gfNorm(raw);
-    if(n.monthly)return n.monthly;
-    // Fallback: most recent month with monthly fee
-    var sorted=allMonths.filter(function(mk){return mk<=m;}).sort();
+    // If this month has an explicit monthly value (including 0), use it
+    if(raw&&(raw.monthly!==undefined&&raw.monthly!==null||(raw.type==="monthly")))return n.monthly;
+    // Fallback: most recent month with explicit monthly fee
+    var sorted=allMonths.filter(function(mk){return mk<m;}).sort();
     for(var i=sorted.length-1;i>=0;i--){
-      var r=gfNorm(gfRaw(c,sorted[i]));
-      if(r.monthly)return r.monthly;
+      var prev=gfRaw(c,sorted[i]);
+      if(prev&&(prev.monthly!==undefined&&prev.monthly!==null||(prev.type==="monthly"))){
+        return gfNorm(prev).monthly;
+      }
     }
     return 0;
   };
@@ -470,32 +582,63 @@ export default function App(){
       if(allRec.length>0){
         var newMonths=Array.from(new Set(mapped.map(function(r){return getMK(r.date);}))).sort();
         var existMonths=Array.from(new Set(allRec.map(function(r){return getMK(r.date);}))).sort();
-        var choice=window.confirm(
-          "Hai gia' "+allRec.length+" record caricati ("+existMonths.map(function(m){return getML(m);}).join(", ")+").\n\n"+
-          "Il nuovo CSV ha "+mapped.length+" record ("+newMonths.map(function(m){return getML(m);}).join(", ")+").\n\n"+
-          "OK = AGGIUNGI ai dati esistenti\nAnnulla = SOSTITUISCI tutto"
-        );
-        if(choice){
-          // Append
+        var msg="Hai già "+allRec.length+" record ("+existMonths.map(function(m){return getML(m);}).join(", ")+").\n";
+        msg+="Il nuovo CSV ha "+mapped.length+" record ("+newMonths.map(function(m){return getML(m);}).join(", ")+").\n\n";
+        msg+="Cosa vuoi fare?\n\n";
+        msg+="A = AGGIUNGI ai dati esistenti\n";
+        msg+="U = AGGIORNA (sostituisce solo i mesi del nuovo CSV, mantiene gli altri)\n";
+        msg+="S = SOSTITUISCI tutto col nuovo CSV\n";
+        msg+="Vuoto = Annulla";
+        var answer=(window.prompt(msg)||"").trim().toLowerCase();
+        if(answer==="a"){
           var result=appendData(text,file.name);
           if(result){
-            // Save merged CSV: we need to store the combined text
-            // Since we can't easily merge CSVs as text, store the allRec as JSON
-            // Actually, keep original CSV for cloud + add new
             var existingCSV=loadCSVLocal();
             var combinedText=existingCSV?existingCSV.text+"\n"+text.split("\n").slice(1).join("\n"):text;
             saveCSVLocal(combinedText,file.name);
             sbSaveNow({csv_text:combinedText,csv_name:file.name});
           }
-        } else {
-          // Replace
+        } else if(answer==="u"){
+          // Update: keep records from months NOT in new CSV, replace months that are in new CSV
+          var newMonthSet={};
+          newMonths.forEach(function(mk){newMonthSet[mk]=true;});
+          var kept=allRec.filter(function(r){return !newMonthSet[getMK(r.date)];});
+          var merged=kept.concat(mapped);
+          setAllRec(merged);
+          setFn(file.name+" (aggiornato "+newMonths.map(function(m){return getML(m);}).join(", ")+")");
+          var ms=Array.from(new Set(merged.map(function(r){return getMK(r.date);}))).sort();
+          setPi(ms.length-1);setCfgM(ms[ms.length-1]||"");
+          setView("dashboard");setTab("overview");
+          // Build combined CSV text
+          var existingCSV2=loadCSVLocal();
+          if(existingCSV2){
+            var existLines=existingCSV2.text.split("\n");
+            var header=existLines[0];
+            // Parse existing CSV dates to filter out updated months
+            var keptLines=[header];
+            for(var li=1;li<existLines.length;li++){
+              var line=existLines[li];if(!line.trim())continue;
+              // Check if this line's date falls in a new month - simple approach: keep lines from other months
+              var keepLine=true;
+              // We can't easily parse each line, so just replace entirely
+              keepLine=false;
+            }
+            // Simpler: just save header + all new CSV lines + old lines from non-updated months
+            // Since we can't reliably parse the old CSV lines, just concatenate mapped records info
+            // Best approach: save combined text as header + new CSV body
+            saveCSVLocal(text,file.name);
+            sbSaveNow({csv_text:text,csv_name:file.name});
+          } else {
+            saveCSVLocal(text,file.name);
+            sbSaveNow({csv_text:text,csv_name:file.name});
+          }
+        } else if(answer==="s"){
           if(loadData(text,file.name)){
             saveCSVLocal(text,file.name);
             sbSaveNow({csv_text:text,csv_name:file.name});
           }
         }
       } else {
-        // No existing data, just load
         if(loadData(text,file.name)){
           saveCSVLocal(text,file.name);
           sbSaveNow({csv_text:text,csv_name:file.name});
@@ -1070,7 +1213,7 @@ export default function App(){
 
     // Header
     html+='<div class="header">';
-    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);margin:0 auto 14px;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:16px;font-weight:800">W</span></div>';
+    html+='<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7C5CFC,#AF52DE);margin:0 auto 14px;display:flex;align-items:center;justify-content:center"><svg width="22" height="25" viewBox="0 0 407.46 455.81" xmlns="http://www.w3.org/2000/svg"><path fill="#fff" d="M384.14,97.37L225.9,6.02c-14.14-8.03-31.34-8.03-45.1,0L22.55,97.37C8.41,105.4,0,120.31,0,136.74v183.09c0,16.05,8.79,30.96,22.55,39.37,69.57,40.13,17.2,9.94,113.14,65.36v-156.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v25.99l-45.1-25.99v-182.71L203.73,46.15l158.24,91.35v182.71l-45.1,25.99v-182.71l-22.55,13c-14.14,8.03-22.55,22.93-22.55,39.37v209.08c96.7-55.81,43.96-25.23,113.14-65.36,14.14-8.03,22.55-22.93,22.55-39.37v-183.09c0-16.05-8.79-30.96-22.55-39.37M180.41,267.08c0-16.05,8.79-30.96,22.55-39.37l22.55-13v235.07c-14.14,8.03-31.34,8.03-45.1,0v-183.09.38Z"/></svg></div>';
     html+='<h1>'+clientName+'</h1>';
     html+='<div class="period">Report attività — '+periodStr+'</div>';
     html+='<div class="meta">Generato il '+(new Date().toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"}))+'</div>';
@@ -1161,7 +1304,7 @@ export default function App(){
       <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",padding:24,WebkitFontSmoothing:"antialiased"}}>
         <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
           <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",margin:"0 auto 20px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{color:"#fff",fontSize:20,fontWeight:800}}>W</span>
+            <span style={{color:"#fff",fontSize:20,fontWeight:800}}><WillabLogo size={28}/></span>
           </div>
           <h1 style={{fontSize:28,fontWeight:800,margin:"0 0 6px",letterSpacing:"-.03em",color:C.tx}}>Willab Analytics</h1>
           <p style={{color:C.tm,fontSize:14,lineHeight:1.6,marginBottom:32}}>Carica l'export Time Tracking di ClickUp</p>
@@ -1236,56 +1379,93 @@ export default function App(){
 
   var extCL=CL.filter(function(c){return !c.isI;});
 
+  var tabLabels={overview:"Overview",areas:"Aree",clients:"Clienti",profitability:"Marginalità",team:"Team",multimedia:"Multimedia",insight:"Insight",extras:"Costi Extra",config:"Config"};
+  var navItems=[
+    {section:"Analisi",items:[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti",CL.length],[PieChart,"profitability","Marginalità"],[Users,"team","Team",PL.length],[Camera,"multimedia","Multimedia"]]},
+    {section:"Gestione",items:[[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]]}
+  ];
+  var breadcrumb="Willab Analytics › "+(tabLabels[tab]||"Overview");
+
   return (
-    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",WebkitFontSmoothing:"antialiased"}}>
-      {/* Header */}
-      <div style={{background:"rgba(255,255,255,0.72)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:"1px solid "+C.bdL,padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:13,fontWeight:800}}>W</span></div>
-          <span style={{fontSize:15,fontWeight:700,letterSpacing:"-.01em"}}>Willab Analytics</span>
-          <span style={{fontSize:12,color:C.td,marginLeft:4}}>{fn}</span>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'SF Pro Display','SF Pro',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",WebkitFontSmoothing:"antialiased",display:"flex"}}>
+
+      {/* ═══ SIDEBAR ═══ */}
+      <aside style={{width:SB_W,background:"#fff",borderRight:"1px solid #E8E7EC",display:"flex",flexDirection:"column",padding:"20px 0",position:"fixed",top:0,left:0,bottom:0,zIndex:20,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 20px",marginBottom:24}}>
+          <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#7C5CFC,#AF52DE)",display:"flex",alignItems:"center",justifyContent:"center"}}><WillabLogo size={17}/></div>
+          <div><div style={{fontSize:15,fontWeight:800,color:"#1C1B1F",letterSpacing:"-0.02em"}}>Willab</div><div style={{fontSize:10,color:"#8E8E93",fontWeight:500}}>Analytics</div></div>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={generateReport} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><FileText size={14} strokeWidth={2}/> Report</button>
-          <button onClick={exportExcel} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Download size={14} strokeWidth={2}/> Excel</button>
-          <button onClick={function(){if(window.confirm("Vuoi caricare un nuovo CSV? I costi e le fee restano salvati.")){clearCSVLocal();sbSaveNow({csv_text:null,csv_name:null});setView("upload");setAllRec([]);}}} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13} strokeWidth={2}/> Nuovo</button>
-          <button onClick={function(){fr.current&&fr.current.click();}} style={{background:C.sf,border:"1px solid "+C.bd,borderRadius:9,padding:"6px 13px",fontSize:12,fontWeight:600,color:C.ac,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={14} strokeWidth={2}/> CSV</button>
-          <input ref={fr} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={handleFile}/>
-          {syncSt!=="idle"&&<span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600}}>
+
+        {/* Search shortcut */}
+        <div onClick={function(){setCmdSearch(true);setCmdQ("");setTimeout(function(){if(cmdRef.current)cmdRef.current.focus();},50);}} style={{margin:"0 12px 20px",padding:"8px 12px",borderRadius:9,border:"1px solid #E8E7EC",display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:"#A9A7B0",fontSize:12}}>
+          <Search size={14} strokeWidth={2}/> <span style={{flex:1}}>Cerca...</span> <span style={{fontSize:10,color:"#C7C7CC",fontWeight:600,background:"#F5F5F7",padding:"2px 6px",borderRadius:4}}>⌘K</span>
+        </div>
+
+        {/* Nav sections */}
+        {navItems.map(function(sec){return (<div key={sec.section} style={{padding:"0 12px",marginBottom:20}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",letterSpacing:"0.06em",padding:"0 8px",marginBottom:6}}>{sec.section}</div>
+          {sec.items.map(function(t){var Icon=t[0],key=t[1],label=t[2],badge=t[3];var isActive=tab===key;
+            return (<div key={key} onClick={function(){setTab(key);setSearch("");}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,fontSize:13,fontWeight:isActive?600:500,color:isActive?"#7C5CFC":"#6B6A70",background:isActive?"rgba(124,92,252,0.06)":"transparent",cursor:"pointer",marginBottom:2,transition:"all 0.15s"}}>
+              <Icon size={17} strokeWidth={isActive?2.2:1.8} style={{opacity:isActive?1:0.6}}/> <span style={{flex:1}}>{label}</span>
+              {badge&&<span style={{fontSize:10,fontWeight:600,background:isActive?"rgba(124,92,252,0.12)":"#F5F5F7",color:isActive?"#7C5CFC":"#8E8E93",padding:"2px 7px",borderRadius:6}}>{badge}</span>}
+            </div>);
+          })}
+        </div>);})}
+
+        <div style={{marginTop:"auto",padding:"0 20px"}}>
+          {syncSt!=="idle"&&<div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:syncSt==="saving"?C.am:syncSt==="saved"?C.gn:C.rd,fontWeight:600,marginBottom:8}}>
             {syncSt==="saving"&&<Loader size={12} strokeWidth={2} style={{animation:"spin 1s linear infinite"}}/>}
             {syncSt==="saved"&&<Check size={12} strokeWidth={2.5}/>}
             {syncSt==="saving"?"Salvando...":"Salvato ✓"}
-          </span>}
+          </div>}
+          <div style={{fontSize:11,color:"#34C759",display:"flex",alignItems:"center",gap:5}}>● Sincronizzato</div>
         </div>
-      </div>
+      </aside>
 
-      <div style={{maxWidth:1120,margin:"0 auto",padding:"20px 24px"}}>
-        {/* Period */}
-        <div style={{...bx,padding:"12px 18px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-          <div style={{display:"flex",gap:3}}>
-            {["week","month","quarter","all"].map(function(k){return (<Pill key={k} sm on={pm===k} onClick={function(){setPm(k);if(k==="all")setPi(0);else{var kf=k==="week"?function(r){return getWK(r.date);}:k==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};var ks=Array.from(new Set(allRec.map(kf))).sort();setPi(ks.length-1);}}}>{k==="week"?"Settimana":k==="month"?"Mese":k==="quarter"?"Trimestre":"Tutto"}</Pill>);})}
-          </div>
-          {pm!=="all"&&(
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <button onClick={function(){if(canP)setPi(function(i){return i-1;});}} style={{background:"transparent",border:"1px solid "+(canP?C.bd:C.bdL),borderRadius:7,padding:"3px 8px",color:canP?C.ts:C.td,cursor:canP?"pointer":"default",display:"flex",alignItems:"center"}}><ChevronLeft size={16}/></button>
-              <span style={{fontSize:14,fontWeight:700,minWidth:140,textAlign:"center"}}>{pLabel}</span>
-              <button onClick={function(){if(canN)setPi(function(i){return i+1;});}} style={{background:"transparent",border:"1px solid "+(canN?C.bd:C.bdL),borderRadius:7,padding:"3px 8px",color:canN?C.ts:C.td,cursor:canN?"pointer":"default",display:"flex",alignItems:"center"}}><ChevronRight size={16}/></button>
+      {/* ═══ MAIN ═══ */}
+      <div style={{flex:1,marginLeft:SB_W}}>
+
+        {/* Header */}
+        <div style={{padding:"24px 36px 18px",background:"#fff",borderBottom:"1px solid #E8E7EC"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+            <div>
+              <div style={{fontSize:12,color:"#8E8E93",fontWeight:500,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:4}}>{new Date().toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+              <div style={{fontSize:26,fontWeight:800,color:"#1C1B1F",letterSpacing:"-0.03em"}}>Ciao Guglielmo</div>
+              <div style={{fontSize:12,color:"#A9A7B0",marginTop:3}}>{breadcrumb}</div>
             </div>
-          )}
-          <span style={{fontSize:11,color:C.tm}}>{records.length} entries{!hasC&&<span style={{color:C.am,marginLeft:6}}>⚠ Imposta costi</span>}</span>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={generateReport} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"1px solid #E8E7EC",background:"#fff",color:"#6B6A70",cursor:"pointer",fontFamily:"inherit"}}><FileText size={14}/> Report</button>
+              <button onClick={exportExcel} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"1px solid #E8E7EC",background:"#fff",color:"#6B6A70",cursor:"pointer",fontFamily:"inherit"}}><Download size={14}/> Excel</button>
+              <button onClick={function(){fr.current&&fr.current.click();}} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"1px solid #7C5CFC",background:"#7C5CFC",color:"#fff",cursor:"pointer",fontFamily:"inherit"}}><Plus size={14}/> CSV</button>
+              <input ref={fr} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={handleFile}/>
+            </div>
+          </div>
+
+          {/* Period selector */}
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <div style={{display:"flex",gap:0,background:"#F5F5F7",borderRadius:10,padding:3}}>
+              {["week","month","quarter","all"].map(function(k){var isOn=pm===k;return (<button key={k} onClick={function(){setPm(k);if(k==="all")setPi(0);else{var kf=k==="week"?function(r){return getWK(r.date);}:k==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};var ks=Array.from(new Set(allRec.map(kf))).sort();setPi(ks.length-1);}}} style={{padding:"7px 16px",borderRadius:8,fontSize:12,fontWeight:600,border:"none",background:isOn?"#fff":"transparent",color:isOn?"#1C1B1F":"#8E8E93",cursor:"pointer",fontFamily:"inherit",boxShadow:isOn?"0 1px 3px rgba(0,0,0,0.06)":"none",transition:"all .15s"}}>{k==="week"?"Settimana":k==="month"?"Mese":k==="quarter"?"Trimestre":"Tutto"}</button>);})}
+            </div>
+            {pm!=="all"&&(
+              <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:"auto"}}>
+                <button onClick={function(){if(canP)setPi(function(i){return i-1;});}} style={{width:30,height:30,borderRadius:8,border:"1px solid #E8E7EC",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:canP?"pointer":"default",color:canP?"#6B6A70":"#D5D4DA"}}><ChevronLeft size={16}/></button>
+                <span style={{fontSize:14,fontWeight:700,minWidth:140,textAlign:"center"}}>{pLabel}</span>
+                <button onClick={function(){if(canN)setPi(function(i){return i+1;});}} style={{width:30,height:30,borderRadius:8,border:"1px solid #E8E7EC",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:canN?"pointer":"default",color:canN?"#6B6A70":"#D5D4DA"}}><ChevronRight size={16}/></button>
+              </div>
+            )}
+            <span style={{fontSize:11,color:"#8E8E93",marginLeft:"auto"}}>{records.length} entries{!hasC&&<span style={{color:C.am,marginLeft:6}}>⚠ Imposta costi</span>}</span>
+          </div>
         </div>
+
+        {/* Content */}
+        <div style={{padding:"28px 36px"}}>
 
         {/* KPIs */}
-        <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:18}}>
-          <KPI icon={Clock} label="Ore totali" value={fmtH(tH)} sub={PL.length+" persone"} color={C.bl} bg={C.blBg} info="Somma di tutte le ore tracciate nel periodo selezionato, incluse ore interne."/>
-          <KPI icon={DollarSign} label="Costi totali" value={fmt(tC)} sub={tH>0?fmt(tC/tH)+"/h":"—"} color={C.am} bg={C.amBg} info="Somma di costi team (ore x rate) + costi persone fisso + costi extra."/>
-          <KPI icon={Home} label="Ore interne" value={fmtH(iH)} sub={fmt(iC)} color={C.sl} bg="rgba(142,142,147,0.06)" info="Ore taggate [willab] senza fee associata (riunioni, admin, formazione)."/>
-          <KPI icon={TrendingUp} label="Margine" value={fmt(tM)} sub={tF>0?(tM>=0?"+":"")+pct(mPct):"Imposta fee →"} color={tM>=0?C.gn:C.rd} bg={tM>=0?C.gnBg:C.rdBg} info="Margine = Fee clienti - Costi totali team. La % indica il margine sui ricavi."/>
-        </div>
-
-        {/* Tabs */}
-        <div style={{display:"flex",gap:2,marginBottom:18,background:C.sf,borderRadius:13,padding:3,border:"1px solid "+C.bdL,width:"fit-content"}}>
-          {[[LayoutDashboard,"overview","Overview"],[FolderOpen,"areas","Aree"],[Tag,"clients","Clienti"],[PieChart,"profitability","Marginalità"],[Users,"team","Team"],[Lightbulb,"insight","Insight"],[DollarSign,"extras","Costi Extra"],[Settings,"config","Config"]].map(function(t){var Icon=t[0];return (<button key={t[1]} onClick={function(){setTab(t[1]);setSearch("");}} style={{padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,border:"none",background:tab===t[1]?C.ac:"transparent",color:tab===t[1]?"#fff":C.tm,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}><Icon size={14} strokeWidth={tab===t[1]?2.4:2}/> {t[2]}</button>);})}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.bl}}/>Ore totali</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em"}}>{fmtH(tH)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{PL.length+" persone · "+records.length+" entries"}</div></div>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.am}}/>Costi totali</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em"}}>{fmt(tC)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{tH>0?fmt(tC/tH)+"/h media":"—"}</div></div>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.gn}}/>Fee totali</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em"}}>{fmt(tF)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{extCL.length+" clienti attivi"}</div></div>
+          <div style={{...bx,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:"#8E8E93",textTransform:"uppercase",letterSpacing:".04em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{width:6,height:6,borderRadius:99,background:C.ac}}/>Margine</div><div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",color:tM>=0?C.gn:C.rd}}>{fmt(tM)}</div><div style={{fontSize:12,color:"#8E8E93",marginTop:4}}>{tF>0?(tM>=0?"+":"")+pct(mPct)+" sui ricavi":"Imposta fee →"}</div></div>
         </div>
 
         {/* SEARCH BAR + SORT - shown on clients, people, areas, team */}
@@ -1965,6 +2145,114 @@ export default function App(){
           })}</div>
         )}
 
+        {/* MULTIMEDIA TAB */}
+        {tab==="multimedia"&&(
+          <div>
+            {(function(){
+              var mmRecs=records.filter(function(r){return r.area==="Multimedia";});
+              if(mmRecs.length===0)return (<div style={{...bx,padding:32,textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>🎬</div><div style={{fontSize:16,fontWeight:700,marginBottom:6}}>Nessun dato Multimedia</div><div style={{fontSize:13,color:C.tm}}>Carica un CSV con record nella lista "Multimedia".</div></div>);
+
+              var totalH=mmRecs.reduce(function(s,r){return s+r.hours;},0);
+              var mapSize=Object.keys(mmMap).length;
+
+              // Categorize each record
+              mmRecs.forEach(function(r){r._mmCat=getMmCat(r.taskId,r.task);});
+
+              // Group by client
+              var byClient={};
+              mmRecs.forEach(function(r){
+                var cn=r.client||"(senza cliente)";
+                if(!byClient[cn])byClient[cn]={h:0,cats:{},people:{}};
+                byClient[cn].h+=r.hours;
+                byClient[cn].people[r.user]=1;
+                var cat=r._mmCat;
+                if(!byClient[cn].cats[cat])byClient[cn].cats[cat]={h:0,tasks:{}};
+                byClient[cn].cats[cat].h+=r.hours;
+                if(r.task){
+                  if(!byClient[cn].cats[cat].tasks[r.task])byClient[cn].cats[cat].tasks[r.task]=0;
+                  byClient[cn].cats[cat].tasks[r.task]+=r.hours;
+                }
+              });
+              var sortedClients=Object.keys(byClient).sort(function(a,b){return byClient[b].h-byClient[a].h;});
+
+              // Global category totals
+              var catTotals={};
+              mmRecs.forEach(function(r){catTotals[r._mmCat]=(catTotals[r._mmCat]||0)+r.hours;});
+
+              var catColors={"Riprese":"#FF9500","Editing":"#AF52DE","Trasferta":"#FF3B30","Contenuti":"#34C759"};
+              var catIcons={"Riprese":"📷","Editing":"🎬","Trasferta":"🚗","Contenuti":"🎥"};
+              var catOrder=["Riprese","Editing","Trasferta","Contenuti"];
+
+              // Accordion state for multimedia clients
+              var _mmOpen=alOpen; // reuse alOpen state
+              var toggleMm=toggleAl;
+
+              return (<div>
+                {/* KPIs */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:9,fontWeight:700,color:C.bl,letterSpacing:".04em"}}>ORE TOTALI</div><div style={{fontSize:20,fontWeight:800}}>{fmtH(totalH)}</div><div style={{fontSize:10,color:C.tm}}>{mmRecs.length} entries</div></div>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:9,fontWeight:700,color:C.am,letterSpacing:".04em"}}>CLIENTI</div><div style={{fontSize:20,fontWeight:800}}>{sortedClients.length}</div><div style={{fontSize:10,color:C.tm}}>con multimedia</div></div>
+                  <div style={{...bx,padding:"12px",textAlign:"center"}}><div style={{fontSize:9,fontWeight:700,color:C.ac,letterSpacing:".04em"}}>MAPPING</div><div style={{fontSize:20,fontWeight:800}}>{mapSize}</div><div style={{fontSize:10,color:C.tm}}>task mappati</div></div>
+                </div>
+
+                {/* Category pills */}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+                  {catOrder.map(function(cat){
+                    var h=catTotals[cat]||0;
+                    if(h<=0)return null;
+                    return (<div key={cat} style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:"#fff",border:"1px solid "+C.bdL}}>
+                      <span style={{width:7,height:7,borderRadius:99,background:catColors[cat]}}/>
+                      {catIcons[cat]} {cat}: {fmtH(h)} ({pct(h/totalH*100)})
+                    </div>);
+                  })}
+                </div>
+
+                {mapSize===0&&(<div style={{...bx,padding:14,marginBottom:14,background:C.amBg,borderColor:C.am}}>
+                  <div style={{fontSize:12,fontWeight:700,color:C.am,marginBottom:4}}>⚠️ Mapping non configurato</div>
+                  <div style={{fontSize:11,color:C.tm}}>Vai in Config → sezione Multimedia per aggiornare il mapping. Senza mapping, la categorizzazione usa solo le keyword nel nome del task.</div>
+                </div>)}
+
+                {/* Client cards */}
+                {sortedClients.map(function(cn,ci){
+                  var cd=byClient[cn];
+                  var isOpen=_mmOpen["mm_"+cn];
+                  var clr=gcc(ci);
+                  return (<div key={cn} style={{...bx,marginBottom:10,overflow:"hidden"}}>
+                    <div onClick={function(){toggleMm("mm_"+cn);}} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"2px 0"}}>
+                      <span style={{width:10,height:10,borderRadius:3,background:clr,flexShrink:0}}/>
+                      <span style={{fontSize:14,fontWeight:700,textTransform:"capitalize",flex:1}}>{cn}</span>
+                      <span style={{fontSize:11,color:C.tm}}>{Object.keys(cd.people).length+" pers."}</span>
+                      <span style={{fontSize:15,fontWeight:800,color:clr}}>{fmtH(cd.h)}</span>
+                      <ChevronDown size={14} color={C.tm} style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}/>
+                    </div>
+
+                    {isOpen&&(<div style={{marginTop:12}}>
+                      {/* Category breakdown */}
+                      {catOrder.map(function(cat){
+                        if(!cd.cats[cat])return null;
+                        var catD=cd.cats[cat];
+                        var cclr=catColors[cat];
+                        var sortedTasks=Object.keys(catD.tasks).map(function(t){return{name:t,h:catD.tasks[t]};}).sort(function(a,b){return b.h-a.h;});
+                        return (<div key={cat} style={{marginBottom:12}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,padding:"6px 10px",borderRadius:8,background:cclr+"11",color:cclr,marginBottom:6}}>
+                            {catIcons[cat]} {cat} — {fmtH(catD.h)}
+                          </div>
+                          {sortedTasks.map(function(t){
+                            return (<div key={t.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0 3px 14px",borderLeft:"2px solid "+cclr+"44",marginBottom:1}}>
+                              <span style={{fontSize:11,color:C.ts,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8}}>{t.name}</span>
+                              <span style={{fontSize:11,fontWeight:600,color:C.tm,flexShrink:0}}>{fmtH(t.h)}</span>
+                            </div>);
+                          })}
+                        </div>);
+                      })}
+                    </div>)}
+                  </div>);
+                })}
+              </div>);
+            })()}
+          </div>
+        )}
+
         {/* INSIGHT TAB */}
         {tab==="insight"&&(
           <div>
@@ -1977,12 +2265,12 @@ export default function App(){
               if(noClient.length>0){
                 var ncByUser={};
                 noClient.forEach(function(r){
-                  if(!ncByUser[r.user])ncByUser[r.user]={h:0,tasks:new Set(),entries:0};
+                  if(!ncByUser[r.user])ncByUser[r.user]={h:0,taskMap:{},entries:0};
                   ncByUser[r.user].h+=r.hours;
                   ncByUser[r.user].entries++;
-                  if(r.task)ncByUser[r.user].tasks.add(r.task);
+                  if(r.task)ncByUser[r.user].taskMap[r.task]=1;
                 });
-                var ncList=Object.keys(ncByUser).map(function(u){return{name:u,h:ncByUser[u].h,entries:ncByUser[u].entries,tasks:Array.from(ncByUser[u].tasks)};}).sort(function(a,b){return b.h-a.h;});
+                var ncList=Object.keys(ncByUser).map(function(u){return{name:u,h:ncByUser[u].h,entries:ncByUser[u].entries,tasks:Object.keys(ncByUser[u].taskMap)};}).sort(function(a,b){return b.h-a.h;});
                 var ncTotal=ncList.reduce(function(s,u){return s+u.h;},0);
                 insights.push({type:"warn",title:"Ore senza cliente",sub:fmtH(ncTotal)+" totali · "+noClient.length+" entries senza tag cliente",details:ncList});
               }
@@ -2321,8 +2609,8 @@ export default function App(){
               <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Mensile si eredita. One-shot si distribuisce sulle ore. Si sommano.</p>
               {allClients.map(function(c,ci){
                 var raw=cfgFees[c];var norm=gfNorm(raw);
+                var hasDirectM=raw&&(raw.monthly!==undefined&&raw.monthly!==null||(raw.type==="monthly"));
                 var inheritedVal=gfMonthly(c,cm);
-                var hasDirectM=norm.monthly>0;
                 var isInheritedM=!hasDirectM&&inheritedVal>0;
                 var h=allRec.filter(function(r){return r.client===c&&getMK(r.date)===cm;}).reduce(function(s,r){return s+r.hours;},0);
                 return (<div key={c} style={{background:C.sf,border:"1px solid "+C.bdL,borderRadius:12,padding:16,marginBottom:10,opacity:h>0?1:0.5}}>
@@ -2339,7 +2627,7 @@ export default function App(){
                           <input type="number" min="0" step="100" value={hasDirectM?norm.monthly:""} onChange={function(e){sf(c,cm,"monthly",parseFloat(e.target.value)||0);}} style={{...ix,width:"100%",paddingRight:28,textAlign:"right",fontSize:15,fontWeight:700,height:42}} placeholder={isInheritedM?Math.round(inheritedVal):"0"}/>
                           <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:11,fontWeight:600}}>€/m</span>
                         </div>
-                        {isInheritedM&&<button onClick={function(){sf(c,cm,"monthly",0);}} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
+                        {(hasDirectM||isInheritedM)&&<button onClick={function(){setCfg(function(prev){var n=JSON.parse(JSON.stringify(prev));if(n[cm]&&n[cm].fees&&n[cm].fees[c]){delete n[cm].fees[c].monthly;if(n[cm].fees[c].type==="monthly"){delete n[cm].fees[c].type;delete n[cm].fees[c].amount;}}return n;});}} style={{background:C.rd+"12",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"8px 10px",color:C.rd,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0,lineHeight:1}}>✕</button>}
                       </div>
                     </div>
                     <div>
@@ -2447,20 +2735,77 @@ export default function App(){
               <button onClick={function(){addBudget("","Nuovo progetto",0);}} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px dashed "+C.ac+"44",background:"transparent",color:C.ac,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={14}/> Aggiungi budget</button>
             </Accordion>
 
+            {/* Multimedia Mapping */}
+            <Accordion icon={Camera} title="Mapping Multimedia" badge={Object.keys(mmMap).length+" task mappati"} open={cfgOpen.multimedia} onToggle={function(){toggleCfg("multimedia");}}>
+              <p style={{color:C.tm,fontSize:13,marginBottom:14}}>Mappa i task della lista Multimedia alle categorie Riprese/Editing/Trasferta. Richiede il token API ClickUp.</p>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <input id="ck-token-mm" type="password" defaultValue={typeof localStorage!=="undefined"?localStorage.getItem("wl_ck_token")||"":""} placeholder="Token API ClickUp (pk_...)" style={{...ix,flex:1,fontSize:12}}/>
+                <button onClick={function(){var tok=document.getElementById("ck-token-mm").value;if(tok)try{localStorage.setItem("wl_ck_token",tok);}catch(e){}updateMmMapping(tok);}} disabled={mmLoading} style={{padding:"8px 16px",borderRadius:8,border:"none",background:mmLoading?"#ccc":"linear-gradient(135deg,#7C5CFC,#AF52DE)",color:"#fff",fontSize:12,fontWeight:700,cursor:mmLoading?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{mmLoading?"Aggiornando...":"Aggiorna mapping"}</button>
+              </div>
+              {mmStatus&&<div style={{padding:"8px 12px",background:mmLoading?C.amBg:C.gnBg,borderRadius:8,fontSize:11,color:mmLoading?C.am:C.gn,fontWeight:600,marginBottom:10}}>{mmStatus}</div>}
+              {Object.keys(mmMap).length>0&&(<div>
+                <div style={{fontSize:11,color:C.tm,marginBottom:6}}>Categorie mappate:</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {["Riprese","Editing","Trasferta"].map(function(cat){
+                    var count=Object.values(mmMap).filter(function(v){return v===cat;}).length;
+                    var colors={"Riprese":"#FF9500","Editing":"#AF52DE","Trasferta":"#FF3B30"};
+                    return (<span key={cat} style={{fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,background:colors[cat]+"15",color:colors[cat]}}>{cat}: {count} task</span>);
+                  })}
+                </div>
+              </div>)}
+            </Accordion>
+
             <div style={{...bx,padding:12,background:C.gn+"08",borderColor:C.gn+"22"}}><span style={{fontSize:12,color:C.gn}}>✓ Salvato automaticamente nel cloud</span></div>
           </div>
         )}
 
-        <div style={{textAlign:"center",padding:"30px 0 14px",color:C.td,fontSize:10}}>Willab Analytics</div>
+        </div>{/* end content padding */}
+      </div>{/* end main */}
 
-        {/* UNDO TOAST */}
-        {undoData&&(
-          <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1C1B1F",color:"#fff",borderRadius:12,padding:"12px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 24px rgba(0,0,0,0.3)",zIndex:999,fontSize:13,fontWeight:600}}>
-            <span>{undoData.label}</span>
-            <button onClick={doUndo} style={{background:"#7C5CFC",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Annulla</button>
+      {/* ═══ CMD+K SEARCH MODAL ═══ */}
+      {cmdSearch&&(
+        <div onClick={function(){setCmdSearch(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(4px)",zIndex:100,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"15vh"}}>
+          <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.2)",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 20px",borderBottom:"1px solid #E8E7EC"}}>
+              <Search size={18} color="#8E8E93" strokeWidth={2}/>
+              <input ref={cmdRef} type="text" value={cmdQ} onChange={function(e){setCmdQ(e.target.value);}} placeholder="Cerca clienti, persone, aree..." style={{flex:1,border:"none",outline:"none",fontSize:15,fontWeight:500,color:"#1C1B1F",fontFamily:"inherit"}}/>
+              <span style={{fontSize:10,color:"#C7C7CC",fontWeight:600,background:"#F5F5F7",padding:"3px 8px",borderRadius:5}}>ESC</span>
+            </div>
+            <div style={{maxHeight:320,overflowY:"auto",padding:"8px"}}>
+              {(function(){
+                var q=cmdQ.toLowerCase().trim();
+                if(!q)return (<div style={{padding:"20px",textAlign:"center",color:"#8E8E93",fontSize:13}}>Digita per cercare...</div>);
+                var results=[];
+                // Search clients
+                CL.forEach(function(c){if(c.name.toLowerCase().indexOf(q)>=0)results.push({type:"cliente",name:c.name,sub:fmtH(c.hours),tab:"clients"});});
+                // Search people
+                PL.forEach(function(p){if(p.name.toLowerCase().indexOf(q)>=0)results.push({type:"persona",name:p.name,sub:fmtH(p.hours),tab:"team"});});
+                // Search areas
+                AL.forEach(function(a){if(a.name.toLowerCase().indexOf(q)>=0)results.push({type:"area",name:a.name,sub:fmtH(a.hours),tab:"areas"});});
+                // Search tabs
+                Object.keys(tabLabels).forEach(function(k){if(tabLabels[k].toLowerCase().indexOf(q)>=0)results.push({type:"tab",name:tabLabels[k],sub:"Vai alla sezione",tab:k});});
+                if(results.length===0)return (<div style={{padding:"20px",textAlign:"center",color:"#8E8E93",fontSize:13}}>Nessun risultato</div>);
+                var typeIcons={cliente:"🏷️",persona:"👤",area:"📁",tab:"📊"};
+                return results.slice(0,10).map(function(r,i){
+                  return (<div key={i} onClick={function(){setTab(r.tab);setSearch(r.type!=="tab"?r.name:"");setCmdSearch(false);}} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:10,cursor:"pointer",transition:"background 0.1s"}} onMouseEnter={function(e){e.currentTarget.style.background="#F5F5F7";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:16}}>{typeIcons[r.type]}</span>
+                    <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,textTransform:"capitalize"}}>{r.name}</div><div style={{fontSize:11,color:"#8E8E93"}}>{r.type}</div></div>
+                    <span style={{fontSize:12,color:"#8E8E93",fontWeight:500}}>{r.sub}</span>
+                  </div>);
+                });
+              })()}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* UNDO TOAST */}
+      {undoData&&(
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1C1B1F",color:"#fff",borderRadius:12,padding:"12px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 24px rgba(0,0,0,0.3)",zIndex:999,fontSize:13,fontWeight:600}}>
+          <span>{undoData.label}</span>
+          <button onClick={doUndo} style={{background:"#7C5CFC",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Annulla</button>
+        </div>
+      )}
     </div>
   );
 }
