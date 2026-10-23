@@ -273,6 +273,7 @@ export default function App(){
   var _t=useState("overview"),tab=_t[0],setTab=_t[1];
   var _f=useState(""),fn=_f[0],setFn=_f[1];
   var _pm=useState("month"),pm=_pm[0],setPm=_pm[1];
+  var _yf=useState(null),yearFilter=_yf[0],setYearFilter=_yf[1];
   var _pi=useState(0),pi=_pi[0],setPi=_pi[1];
   var _cm=useState(""),cfgM=_cm[0],setCfgM=_cm[1];
   var _po=useState({clients:true,areas:false,people:false,trend:false}),profOpen=_po[0],setProfOpen=_po[1];
@@ -429,10 +430,11 @@ export default function App(){
   },[pm,cp]);
 
   var records=useMemo(function(){
-    if(pm==="all")return allRec;
+    var base=yearFilter?allRec.filter(function(r){return r.date&&r.date.getFullYear()===yearFilter;}):allRec;
+    if(pm==="all")return base;
     var kf=pm==="week"?function(r){return getWK(r.date);}:pm==="month"?function(r){return getMK(r.date);}:function(r){return getQK(r.date);};
-    return allRec.filter(function(r){return kf(r)===cp;});
-  },[allRec,pm,cp]);
+    return base.filter(function(r){return kf(r)===cp;});
+  },[allRec,pm,cp,yearFilter]);
 
   var people=useMemo(function(){var s=new Set();allRec.forEach(function(r){s.add(r.user);});return Array.from(s).sort();},[allRec]);
   var isInternal=function(cn){
@@ -1591,7 +1593,7 @@ export default function App(){
             <div style={{position:"relative"}}>
               <button onClick={function(e){e.stopPropagation();setPpOpen(!ppOpen);}} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:10,border:"1px solid "+(ppOpen?"#7C5CFC":"#E8E7EC"),background:ppOpen?"rgba(124,92,252,0.04)":"#fff",cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
                 <Calendar size={15} color={ppOpen?"#7C5CFC":"#8E8E93"} strokeWidth={2}/>
-                <span style={{fontSize:13,fontWeight:600,color:"#1C1B1F"}}>{pm==="all"?"Tutto il periodo":pLabel}</span>
+                <span style={{fontSize:13,fontWeight:600,color:"#1C1B1F"}}>{pm==="all"?(yearFilter?"YTD "+yearFilter:"Tutto il periodo"):pLabel}</span>
                 <ChevronDown size={14} color="#8E8E93" style={{transition:"transform 0.2s",transform:ppOpen?"rotate(180deg)":"none"}}/>
               </button>
 
@@ -1605,18 +1607,19 @@ export default function App(){
                     var lastMonth=new Date(now.getFullYear(),now.getMonth()-1,1);var lm=lastMonth.getFullYear()+"-"+String(lastMonth.getMonth()+1).padStart(2,"0");
                     var q=Math.ceil((now.getMonth()+1)/3);
                     var presets=[
-                      {label:"Questo mese",mode:"month",target:curMonth},
-                      {label:"Mese scorso",mode:"month",target:lm},
-                      {label:"Q1 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q1"},
-                      {label:"Q2 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q2"},
-                      {label:"Q3 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q3"},
-                      {label:"Q4 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q4"},
-                      {label:"YTD "+now.getFullYear(),mode:"all",target:"all"},
-                      {label:"Tutto",mode:"all",target:"all"},
+                      {label:"Questo mese",mode:"month",target:curMonth,year:null},
+                      {label:"Mese scorso",mode:"month",target:lm,year:null},
+                      {label:"Q1 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q1",year:null},
+                      {label:"Q2 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q2",year:null},
+                      {label:"Q3 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q3",year:null},
+                      {label:"Q4 "+now.getFullYear(),mode:"quarter",target:now.getFullYear()+"-Q4",year:null},
+                      {label:"YTD "+now.getFullYear(),mode:"all",target:"ytd",year:now.getFullYear()},
+                      {label:"Tutto",mode:"all",target:"all",year:null},
                     ];
                     return presets.map(function(pr){
-                      var isActive=(pr.mode==="all"&&pm==="all")||(pr.mode===pm&&pr.target===cp);
+                      var isActive=(pr.target==="ytd"&&pm==="all"&&yearFilter===pr.year)||(pr.target==="all"&&pm==="all"&&!yearFilter)||(pr.mode!=="all"&&pr.mode===pm&&pr.target===cp);
                       return (<button key={pr.label} onClick={function(){
+                        setYearFilter(pr.year);
                         if(pr.mode==="all"){setPm("all");setPi(0);}
                         else{
                           setPm(pr.mode);
@@ -1645,7 +1648,7 @@ export default function App(){
                           var isActive=pm==="month"&&cp===mk;
                           var mNames=["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
                           return (<button key={mk} disabled={!hasData} onClick={function(){
-                            setPm("month");
+                            setYearFilter(null);setPm("month");
                             var ks=Array.from(new Set(allRec.map(function(r){return getMK(r.date);}))).sort();
                             var idx=ks.indexOf(mk);if(idx>=0)setPi(idx);
                             setPpOpen(false);
@@ -1665,7 +1668,7 @@ export default function App(){
                       var isActive=pm==="quarter"&&cp===qk;
                       var parts=qk.split("-");
                       return (<button key={qk} onClick={function(){
-                        setPm("quarter");
+                        setYearFilter(null);setPm("quarter");
                         var ks=Array.from(new Set(allRec.map(function(r){return getQK(r.date);}))).sort();
                         var idx=ks.indexOf(qk);if(idx>=0)setPi(idx);
                         setPpOpen(false);
@@ -2651,12 +2654,27 @@ export default function App(){
 
                         {/* Details: person list with hours */}
                         {ins.details&&ins.details.map(function(d,di){
-                          return (<div key={di} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:di<ins.details.length-1?"1px solid "+C.bdL:"none"}}>
-                            <div>
+                          return (<div key={di} style={{display:"flex",alignItems:"center",padding:"6px 0",borderBottom:di<ins.details.length-1?"1px solid "+C.bdL:"none",gap:8}}>
+                            <div style={{flex:1}}>
                               <span style={{fontSize:12,fontWeight:600}}>{d.name}</span>
                               {d.tasks&&d.tasks.length>0&&<div style={{fontSize:10,color:C.td,marginTop:1}}>{d.tasks.join(", ")}</div>}
                             </div>
-                            <span style={{fontSize:12,fontWeight:700,color:tc.color}}>{fmtH(d.h)}</span>
+                            <span style={{fontSize:12,fontWeight:700,color:tc.color,flexShrink:0}}>{fmtH(d.h)}</span>
+                            {ins.title==="Ore senza cliente"&&d.tasks&&d.tasks.length>0&&(
+                              <button onClick={function(e){
+                                e.stopPropagation();
+                                var msg="Ciao "+d.name.split(" ")[0]+",\n\n";
+                                var perLabel=pm==="all"?(yearFilter?"YTD "+yearFilter:"tutto il periodo"):pLabel;
+                                msg+="Ho notato che nel periodo "+perLabel+" queste attività non hanno il tag cliente nel time tracking:\n\n";
+                                d.tasks.forEach(function(t){msg+="• "+t+"\n";});
+                                msg+="\nTotale: "+fmtH(d.h)+"\n\n";
+                                msg+="Puoi aggiungere il tag del cliente corretto su ClickUp? Grazie!";
+                                navigator.clipboard.writeText(msg).then(function(){
+                                  var btn=e.target;btn.textContent="✓ Copiato";btn.style.color="#34C759";btn.style.borderColor="#34C759";
+                                  setTimeout(function(){btn.textContent="Copia";btn.style.color="#8E8E93";btn.style.borderColor="#E8E7EC";},2000);
+                                });
+                              }} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #E8E7EC",background:"#fff",fontSize:10,fontWeight:600,color:"#8E8E93",cursor:"pointer",fontFamily:"inherit",flexShrink:0,transition:"all .15s"}}>Copia</button>
+                            )}
                           </div>);
                         })}
 
